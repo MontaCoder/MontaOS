@@ -1,8 +1,29 @@
 const path = require('path')
+const os = require('os')
 const { merge } = require('webpack-merge')
 const commonConfiguration = require('./webpack.common.js')
-const ip = require('ip')
 const portFinderSync = require('portfinder-sync')
+
+const getLocalIpAddress = () =>
+{
+    for (const networkInterface of Object.values(os.networkInterfaces()))
+    {
+        if (!networkInterface)
+        {
+            continue
+        }
+
+        for (const address of networkInterface)
+        {
+            if (address.family === 'IPv4' && !address.internal)
+            {
+                return address.address
+            }
+        }
+    }
+
+    return null
+}
 
 const infoColor = (_message) =>
 {
@@ -23,7 +44,7 @@ module.exports = merge(
             host: 'local-ip',
             port: portFinderSync.getPort(8080),
             open: true,
-            https: false,
+            server: 'http',
             allowedHosts: 'all',
             hot: false,
             watchFiles: ['src/**', 'static/**'],
@@ -38,15 +59,24 @@ module.exports = merge(
                 overlay: true,
                 progress: false
             },
-            onAfterSetupMiddleware: function(devServer)
+            setupMiddlewares: function(middlewares, devServer)
             {
                 const port = devServer.options.port
-                const https = devServer.options.https ? 's' : ''
-                const localIp = ip.address()
-                const domain1 = `http${https}://${localIp}:${port}`
-                const domain2 = `http${https}://localhost:${port}`
+                const server = devServer.options.server
+                const https = server === 'https' || (typeof server === 'object' && server.type === 'https') ? 's' : ''
+                const localIp = getLocalIpAddress()
+                const domains = []
+
+                if (localIp)
+                {
+                    domains.push(`http${https}://${localIp}:${port}`)
+                }
+
+                domains.push(`http${https}://localhost:${port}`)
                 
-                console.log(`Project running at:\n  - ${infoColor(domain1)}\n  - ${infoColor(domain2)}`)
+                console.log(`Project running at:\n${domains.map((domain) => `  - ${infoColor(domain)}`).join('\n')}`)
+
+                return middlewares
             }
         }
     }
