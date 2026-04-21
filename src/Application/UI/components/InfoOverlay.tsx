@@ -20,6 +20,7 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
     const [textDone, setTextDone] = useState(false);
     const [volumeVisible, setVolumeVisible] = useState(false);
     const [freeCamVisible, setFreeCamVisible] = useState(false);
+    const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
     const typeText = (
         i: number,
@@ -33,7 +34,7 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
             text = refOverride.current;
         }
         if (i < text.length) {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 if (visRef.current === true)
                     window.postMessage(
                         { type: 'keydown', key: `_AUTO_${text[i]}` },
@@ -50,6 +51,8 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
                     refOverride
                 );
             }, Math.random() * 50 + 50 * MULTIPLIER);
+
+            timersRef.current.push(timer);
         } else {
             callback();
         }
@@ -57,7 +60,7 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
 
     useEffect(() => {
         if (visible && nameText == '') {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 typeText(0, '', NAME_TEXT, setNameText, () => {
                     typeText(0, '', TITLE_TEXT, setTitleText, () => {
                         typeText(
@@ -73,18 +76,26 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
                     });
                 });
             }, 400);
+
+            timersRef.current.push(timer);
         }
         visRef.current = visible;
     }, [visible]);
 
     useEffect(() => {
         if (textDone) {
-            setTimeout(() => {
+            let freeCamTimer: ReturnType<typeof setTimeout> | undefined;
+            const volumeTimer = setTimeout(() => {
                 setVolumeVisible(true);
-                setTimeout(() => {
+                freeCamTimer = setTimeout(() => {
                     setFreeCamVisible(true);
                 }, 250);
             }, 250);
+
+            return () => {
+                clearTimeout(volumeTimer);
+                if (freeCamTimer) clearTimeout(freeCamTimer);
+            };
         }
     }, [textDone]);
 
@@ -103,6 +114,13 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
         timeRef.current = time;
         textDone && setTimeText(time);
     }, [time]);
+
+    useEffect(() => {
+        return () => {
+            timersRef.current.forEach(clearTimeout);
+            timersRef.current = [];
+        };
+    }, []);
 
     return (
         <div style={styles.wrapper}>

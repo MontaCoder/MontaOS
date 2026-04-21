@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import UIEventBus from '../EventBus';
 import InfoOverlay from './InfoOverlay';
@@ -9,25 +9,25 @@ const InterfaceUI: React.FC<InterfaceUIProps> = ({}) => {
     const [initLoad, setInitLoad] = useState(true);
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(true);
-    const interfaceRef = useRef<HTMLDivElement>(null);
+    const interfaceRef = useRef<HTMLElement | null>(null);
 
     useEffect(() => {
-        UIEventBus.on('loadingScreenDone', () => {
+        const unsubscribeLoading = UIEventBus.on('loadingScreenDone', () => {
             setLoading(false);
         });
 
-        // find element by id and set ref
         const element = document.getElementById('ui-interactive');
         if (element) {
-            // @ts-ignore
             interfaceRef.current = element;
         }
+
+        return unsubscribeLoading;
     }, []);
 
-    const initMouseDownHandler = () => {
+    const initMouseDownHandler = useCallback(() => {
         setVisible(true);
         setInitLoad(false);
-    };
+    }, []);
 
     useEffect(() => {
         if (!loading && initLoad) {
@@ -36,22 +36,27 @@ const InterfaceUI: React.FC<InterfaceUIProps> = ({}) => {
                 document.removeEventListener('mousedown', initMouseDownHandler);
             };
         }
-    }, [loading, initLoad]);
+    }, [initLoad, initMouseDownHandler, loading]);
 
     useEffect(() => {
-        UIEventBus.on('enterMonitor', () => {
+        const unsubscribeEnterMonitor = UIEventBus.on('enterMonitor', () => {
             setVisible(false);
             setInitLoad(false);
             if (interfaceRef.current) {
                 interfaceRef.current.style.pointerEvents = 'none';
             }
         });
-        UIEventBus.on('leftMonitor', () => {
+        const unsubscribeLeftMonitor = UIEventBus.on('leftMonitor', () => {
             setVisible(true);
             if (interfaceRef.current) {
                 interfaceRef.current.style.pointerEvents = 'auto';
             }
         });
+
+        return () => {
+            unsubscribeEnterMonitor();
+            unsubscribeLeftMonitor();
+        };
     }, []);
 
     return !loading ? (

@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import eventBus from '../EventBus';
+import {
+    detectWebGLContext,
+    getCurrentDate,
+    getResourceSpacing,
+} from '../bios';
 
 type LoadingProps = {};
 
@@ -18,8 +23,7 @@ const LoadingScreen: React.FC<LoadingProps> = () => {
     const [doneLoading, setDoneLoading] = useState(false);
     const [firefoxError, setFirefoxError] = useState(false);
     const [webGLError, setWebGLError] = useState(false);
-    const [counter, setCounter] = useState(0);
-    const [resources] = useState<string[]>([]);
+    const [resources, setResources] = useState<string[]>([]);
     const [mobileWarning, setMobileWarning] = useState(window.innerWidth < 768);
 
     const onResize = () => {
@@ -30,7 +34,13 @@ const LoadingScreen: React.FC<LoadingProps> = () => {
         }
     };
 
-    window.addEventListener('resize', onResize);
+    useEffect(() => {
+        window.addEventListener('resize', onResize);
+
+        return () => {
+            window.removeEventListener('resize', onResize);
+        };
+    }, []);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -47,52 +57,62 @@ const LoadingScreen: React.FC<LoadingProps> = () => {
     }, []);
 
     useEffect(() => {
-        eventBus.on('loadedSource', (data) => {
+        return eventBus.on('loadedSource', (data) => {
             setProgress(data.progress);
             setToLoad(data.toLoad);
             setLoaded(data.loaded);
-            resources.push(
-                `Loaded ${data.sourceName}${getSpace(
+            setResources((currentResources) => {
+                const nextResource = `Loaded ${
                     data.sourceName
-                )} ... ${Math.round(data.progress * 100)}%`
-            );
-            if (resources.length > 8) {
-                resources.shift();
-            }
+                }${getResourceSpacing(data.sourceName)} ... ${Math.round(
+                    data.progress * 100
+                )}%`;
+
+                return [...currentResources, nextResource].slice(-8);
+            });
         });
     }, []);
 
     useEffect(() => {
         setShowLoadingResources(true);
-        setCounter(counter + 1);
     }, [loaded]);
 
     useEffect(() => {
         if (progress >= 1 && !firefoxError && !webGLError) {
             setDoneLoading(true);
 
-            setTimeout(() => {
+            let startPopupTimer: ReturnType<typeof setTimeout> | undefined;
+            const loadingTextTimer = setTimeout(() => {
                 setLoadingTextOpacity(0);
-                setTimeout(() => {
+                startPopupTimer = setTimeout(() => {
                     setStartPopupOpacity(1);
                 }, 500);
             }, 1000);
+
+            return () => {
+                clearTimeout(loadingTextTimer);
+                if (startPopupTimer) clearTimeout(startPopupTimer);
+            };
         }
-    }, [progress]);
+    }, [firefoxError, progress, webGLError]);
 
     useEffect(() => {
         if (firefoxError) {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 setFirefoxPopupOpacity(1);
             }, 500);
+
+            return () => clearTimeout(timer);
         }
     }, [firefoxError]);
 
     useEffect(() => {
         if (webGLError) {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 setWebGLErrorOpacity(1);
             }, 500);
+
+            return () => clearTimeout(timer);
         }
     }, [webGLError]);
 
@@ -104,37 +124,6 @@ const LoadingScreen: React.FC<LoadingProps> = () => {
             ui.style.pointerEvents = 'none';
         }
     }, []);
-
-    const getSpace = (sourceName: string) => {
-        let spaces = '';
-        for (let i = 0; i < 24 - sourceName.length; i++) spaces += '\xa0';
-        return spaces;
-    };
-
-    const getCurrentDate = () => {
-        const date = new Date();
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        const year = date.getFullYear();
-        // add leading zero
-        const monthFormatted = month < 10 ? `0${month}` : month;
-        const dayFormatted = day < 10 ? `0${day}` : day;
-        return `${monthFormatted}/${dayFormatted}/${year}`;
-    };
-
-    const detectWebGLContext = () => {
-        var canvas = document.createElement('canvas');
-
-        // Get WebGLRenderingContext from canvas element.
-        var gl =
-            canvas.getContext('webgl') ||
-            canvas.getContext('experimental-webgl');
-        // Report the result.
-        if (gl && gl instanceof WebGLRenderingContext) {
-            return true;
-        }
-        return false;
-    };
 
     return (
         <div

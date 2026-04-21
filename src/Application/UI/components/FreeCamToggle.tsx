@@ -1,10 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import UIEventBus from '../EventBus';
 import { Easing } from '../Animation';
-// @ts-ignore
 import camera from '../../../../static/textures/UI/camera.svg';
-// @ts-ignore
 import mouse from '../../../../static/textures/UI/mouse.svg';
 
 interface MuteToggleProps {}
@@ -16,7 +14,7 @@ const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
     const [blockEvents, setBlockEvents] = useState(true);
 
     const onMouseDownHandler = useCallback(
-        (event) => {
+        (event: React.MouseEvent<HTMLDivElement>) => {
             setIsActive(true);
             event.preventDefault();
             setFreeCamActive(!freeCamActive);
@@ -37,9 +35,11 @@ const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
     }, []);
 
     useEffect(() => {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             setBlockEvents(false);
         }, 100);
+
+        return () => clearTimeout(timer);
     }, []);
 
     useEffect(() => {
@@ -47,7 +47,7 @@ const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
             window.postMessage({ type: 'keydown', key: `_AUTO_` }, '*');
             UIEventBus.dispatch('freeCamToggle', freeCamActive);
         }
-    }, [freeCamActive]);
+    }, [blockEvents, freeCamActive]);
 
     return (
         <div style={styles.wrapper}>

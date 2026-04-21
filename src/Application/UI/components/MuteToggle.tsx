@@ -1,10 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import UIEventBus from '../EventBus';
 import { Easing } from '../Animation';
-// @ts-ignore
 import volumeOn from '../../../../static/textures/UI/volume_on.svg';
-// @ts-ignore
 import volumeOff from '../../../../static/textures/UI/volume_off.svg';
 
 interface MuteToggleProps {}
@@ -15,7 +13,7 @@ const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
     const [muted, setMuted] = useState(false);
 
     const onMouseDownHandler = useCallback(
-        (event) => {
+        (event: React.MouseEvent<HTMLDivElement>) => {
             setIsActive(true);
             event.preventDefault();
             setMuted(!muted);

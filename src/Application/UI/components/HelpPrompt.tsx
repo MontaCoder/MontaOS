@@ -11,10 +11,11 @@ const HelpPrompt: React.FC<HelpPromptProps> = () => {
     const [helpText, setHelpText] = useState('');
     const [visible, setVisible] = useState(true);
     const visRef = useRef(visible);
+    const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
     const typeHelpText = (i: number, curText: string) => {
         if (i < HELP_TEXT.length && visRef.current) {
-            setTimeout(() => {
+            const timer = setTimeout(() => {
                 window.postMessage(
                     { type: 'keydown', key: `_AUTO_${HELP_TEXT[i]}` },
                     '*'
@@ -23,21 +24,34 @@ const HelpPrompt: React.FC<HelpPromptProps> = () => {
                 setHelpText(curText + HELP_TEXT[i]);
                 typeHelpText(i + 1, curText + HELP_TEXT[i]);
             }, Math.random() * 120 + 50);
+
+            timersRef.current.push(timer);
         }
     };
 
     // make a document listener to listen to clicks
 
     useEffect(() => {
-        setTimeout(() => {
+        const startTimer = setTimeout(() => {
             typeHelpText(0, '');
         }, 500);
-        document.addEventListener('mousedown', () => {
+        timersRef.current.push(startTimer);
+
+        const hidePrompt = () => {
+            setVisible(false);
+        };
+
+        document.addEventListener('mousedown', hidePrompt);
+        const unsubscribeMonitor = UIEventBus.on('enterMonitor', () => {
             setVisible(false);
         });
-        UIEventBus.on('enterMonitor', () => {
-            setVisible(false);
-        });
+
+        return () => {
+            document.removeEventListener('mousedown', hidePrompt);
+            unsubscribeMonitor();
+            timersRef.current.forEach(clearTimeout);
+            timersRef.current = [];
+        };
     }, []);
 
     useEffect(() => {
