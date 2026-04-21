@@ -7,6 +7,15 @@ module.exports = merge(
     {
         mode: 'production',
         devtool: false,
+        performance: {
+            assetFilter: (assetFilename) => {
+                return !/\.(mp4|mp3|ogg|wav|jpg|jpeg|png|gif|svg|wasm)$/i.test(
+                    assetFilename
+                );
+            },
+            maxAssetSize: 2 * 1024 * 1024,
+            maxEntrypointSize: 2 * 1024 * 1024,
+        },
         optimization: {
             moduleIds: 'deterministic',
             chunkIds: 'deterministic',
