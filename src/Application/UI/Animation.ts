@@ -6,7 +6,7 @@ export type AnimationEasing =
     | 'expOut'
     | 'expInOut';
 
-export const Easing: { [key in AnimationEasing]: number[] } = {
+export const Easing: { [key in AnimationEasing]: readonly [number, number, number, number] } = {
     sHard: [0.95, 0, 0.5, 1],
     sMedium: [0.8, 0, 0.2, 1],
     sSoft: [0.6, 0, 0.4, 1],

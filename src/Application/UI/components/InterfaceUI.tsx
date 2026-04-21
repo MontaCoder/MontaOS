@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import UIEventBus from '../EventBus';
 import InfoOverlay from './InfoOverlay';
+import { Easing } from '../Animation';
 
 interface InterfaceUIProps {}
 
@@ -82,7 +83,7 @@ const vars = {
         transition: {
             duration: 0.5,
             delay: 0.3,
-            ease: 'easeOut',
+            ease: Easing.expOut,
         },
     },
     hide: {
@@ -90,7 +91,7 @@ const vars = {
         opacity: 0,
         transition: {
             duration: 0.3,
-            ease: 'easeOut',
+            ease: Easing.expOut,
         },
     },
 };

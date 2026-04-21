@@ -102,7 +102,7 @@ const iconVars = {
         opacity: 0.8,
         transition: {
             duration: 0.1,
-            ease: 'easeOut',
+            ease: Easing.expOut,
         },
     },
     active: {
@@ -118,7 +118,7 @@ const iconVars = {
         opacity: 1,
         transition: {
             duration: 0.2,
-            ease: 'easeOut',
+            ease: Easing.expOut,
         },
     },
 };

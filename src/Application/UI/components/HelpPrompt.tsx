@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 // import eventBus from '../EventBus';
 import { motion } from 'framer-motion';
 import UIEventBus from '../EventBus';
+import { Easing } from '../Animation';
 
 const HELP_TEXT = 'Click anywhere to begin';
 
@@ -86,7 +87,7 @@ const vars = {
         opacity: 0,
         transition: {
             duration: 0.5,
-            ease: 'easeOut',
+            ease: Easing.expOut,
         },
     },
 };

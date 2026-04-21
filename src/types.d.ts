@@ -28,6 +28,11 @@ declare module '*.frag' {
     export default src;
 }
 
+declare module '*.css' {
+    const src: string;
+    export default src;
+}
+
 type TextureResource = {
     name: string;
     type: 'texture';
