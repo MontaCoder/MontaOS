@@ -27,7 +27,7 @@ const sources: Resource[] = [
     {
         name: 'decorTexture',
         type: 'texture',
-        path: 'models/Decor/baked_decor_modified.jpg',
+        path: 'models/Decor/baked_decor.jpg',
     },
     {
         name: 'monitorSmudgeTexture',
