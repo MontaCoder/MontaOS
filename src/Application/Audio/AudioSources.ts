@@ -1,7 +1,6 @@
 import AudioManager from './AudioManager';
 import * as THREE from 'three';
 import UIEventBus from '../UI/EventBus';
-import { Vector3 } from 'three';
 
 export class AudioSource {
     manager: AudioManager;
@@ -11,38 +10,42 @@ export class AudioSource {
     }
 
     update() {}
+
+    destroy() {}
 }
 export class ComputerAudio extends AudioSource {
     lastKey: string;
+    private cleanupListeners: EventUnsubscribe[];
 
     constructor(manager: AudioManager) {
         super(manager);
+        this.cleanupListeners = [];
 
-        document.addEventListener('mousedown', (event: ComputerMouseEvent) => {
+        const onMouseDown = (event: ComputerMouseEvent) => {
             if (event.inComputer) {
                 this.manager.playAudio('mouseDown', {
                     volume: 0.8,
                     position: new THREE.Vector3(800, -300, 1200),
                 });
             }
-        });
+        };
 
-        document.addEventListener('mouseup', (event: ComputerMouseEvent) => {
+        const onMouseUp = (event: ComputerMouseEvent) => {
             if (event.inComputer) {
                 this.manager.playAudio('mouseUp', {
                     volume: 0.8,
                     position: new THREE.Vector3(800, -300, 1200),
                 });
             }
-        });
+        };
 
-        document.addEventListener('keyup', (event: ComputerEvent) => {
+        const onKeyUp = (event: ComputerEvent) => {
             if (event.inComputer) {
                 this.lastKey = '';
             }
-        });
+        };
 
-        document.addEventListener('keydown', (event: ComputerEvent) => {
+        const onKeyDown = (event: ComputerEvent) => {
             if (!event.key) return;
 
             if (event.key.includes('_AUTO_')) {
@@ -62,16 +65,47 @@ export class ComputerAudio extends AudioSource {
                     position: new THREE.Vector3(-300, -400, 1200),
                 });
             }
-        });
+        };
+
+        document.addEventListener('mousedown', onMouseDown as EventListener);
+        document.addEventListener('mouseup', onMouseUp as EventListener);
+        document.addEventListener('keyup', onKeyUp as EventListener);
+        document.addEventListener('keydown', onKeyDown as EventListener);
+
+        this.cleanupListeners = [
+            () =>
+                document.removeEventListener(
+                    'mousedown',
+                    onMouseDown as EventListener
+                ),
+            () =>
+                document.removeEventListener(
+                    'mouseup',
+                    onMouseUp as EventListener
+                ),
+            () =>
+                document.removeEventListener('keyup', onKeyUp as EventListener),
+            () =>
+                document.removeEventListener(
+                    'keydown',
+                    onKeyDown as EventListener
+                ),
+        ];
+    }
+
+    destroy() {
+        this.cleanupListeners.forEach((cleanup) => cleanup());
+        this.cleanupListeners = [];
     }
 }
 
 export class AmbienceAudio extends AudioSource {
     poolKey: string | undefined;
+    private unsubscribeLoadingDone: EventUnsubscribe;
 
     constructor(manager: AudioManager) {
         super(manager);
-        UIEventBus.on('loadingScreenDone', () => {
+        this.unsubscribeLoadingDone = UIEventBus.on('loadingScreenDone', () => {
             this.poolKey = this.manager.playAudio('office', {
                 volume: 1,
                 loop: true,
@@ -121,5 +155,9 @@ export class AmbienceAudio extends AudioSource {
 
         this.manager.setAudioFilterFrequency(this.poolKey, freq - 3000);
         this.manager.setAudioVolume(this.poolKey, volumeClamped);
+    }
+
+    destroy() {
+        this.unsubscribeLoadingDone();
     }
 }

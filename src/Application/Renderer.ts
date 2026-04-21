@@ -119,4 +119,17 @@ export default class Renderer {
         this.overlayInstance.render(this.overlayScene, this.camera.instance);
         this.overlay.position.copy(this.camera.instance.position);
     }
+
+    destroy() {
+        this.overlay.geometry.dispose();
+        const overlayMaterials = Array.isArray(this.overlay.material)
+            ? this.overlay.material
+            : [this.overlay.material];
+        overlayMaterials.forEach((material) => material.dispose());
+        this.instance.dispose();
+        this.overlayInstance.dispose();
+        this.instance.domElement.remove();
+        this.overlayInstance.domElement.remove();
+        this.cssInstance.domElement.remove();
+    }
 }

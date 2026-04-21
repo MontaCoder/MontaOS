@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { CameraKey } from './Camera';
 import Time from '../Utils/Time';
 import Application from '../Application';
 import Mouse from '../Utils/Mouse';
 import Sizes from '../Utils/Sizes';
+import { CAMERA_KEYFRAMES } from './cameraConfig';
 
 export class CameraKeyframeInstance {
     position: THREE.Vector3;
@@ -17,29 +17,6 @@ export class CameraKeyframeInstance {
     update() {}
 }
 
-const keys: { [key in CameraKey]: CameraKeyframe } = {
-    idle: {
-        position: new THREE.Vector3(-20000, 12000, 20000),
-        focalPoint: new THREE.Vector3(0, -1000, 0),
-    },
-    monitor: {
-        position: new THREE.Vector3(0, 950, 2000),
-        focalPoint: new THREE.Vector3(0, 950, 0),
-    },
-    desk: {
-        position: new THREE.Vector3(0, 1800, 5500),
-        focalPoint: new THREE.Vector3(0, 500, 0),
-    },
-    loading: {
-        position: new THREE.Vector3(-35000, 35000, 35000),
-        focalPoint: new THREE.Vector3(0, -5000, 0),
-    },
-    orbitControlsStart: {
-        position: new THREE.Vector3(-15000, 10000, 15000),
-        focalPoint: new THREE.Vector3(-100, 350, 0),
-    },
-};
-
 export class MonitorKeyframe extends CameraKeyframeInstance {
     application: Application;
     sizes: Sizes;
@@ -47,7 +24,7 @@ export class MonitorKeyframe extends CameraKeyframeInstance {
     origin: THREE.Vector3;
 
     constructor() {
-        const keyframe = keys.monitor;
+        const keyframe = CAMERA_KEYFRAMES.monitor;
         super(keyframe);
         this.application = Application.getInstance();
         this.sizes = this.application.sizes;
@@ -65,7 +42,7 @@ export class MonitorKeyframe extends CameraKeyframeInstance {
 
 export class LoadingKeyframe extends CameraKeyframeInstance {
     constructor() {
-        const keyframe = keys.loading;
+        const keyframe = CAMERA_KEYFRAMES.loading;
         super(keyframe);
     }
 
@@ -81,7 +58,7 @@ export class DeskKeyframe extends CameraKeyframeInstance {
     targetPos: THREE.Vector3;
 
     constructor() {
-        const keyframe = keys.desk;
+        const keyframe = CAMERA_KEYFRAMES.desk;
         super(keyframe);
         this.application = Application.getInstance();
         this.mouse = this.application.mouse;
@@ -116,10 +93,10 @@ export class IdleKeyframe extends CameraKeyframeInstance {
     origin: THREE.Vector3;
 
     constructor() {
-        const keyframe = keys.idle;
+        const keyframe = CAMERA_KEYFRAMES.idle;
         super(keyframe);
         this.origin = new THREE.Vector3().copy(keyframe.position);
-        this.time = new Time();
+        this.time = Application.getInstance().time;
     }
 
     update() {
@@ -135,7 +112,7 @@ export class IdleKeyframe extends CameraKeyframeInstance {
 
 export class OrbitControlsStart extends CameraKeyframeInstance {
     constructor() {
-        const keyframe = keys.orbitControlsStart;
+        const keyframe = CAMERA_KEYFRAMES.orbitControlsStart;
         super(keyframe);
     }
 

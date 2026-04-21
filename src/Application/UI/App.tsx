@@ -50,4 +50,11 @@ const createVolumeUI = () => {
     volumeRoot.render(<InterfaceUI />);
 };
 
-export { createUI, createVolumeUI };
+const destroyUI = () => {
+    uiRoot?.unmount();
+    volumeRoot?.unmount();
+    uiRoot = null;
+    volumeRoot = null;
+};
+
+export { createUI, createVolumeUI, destroyUI };

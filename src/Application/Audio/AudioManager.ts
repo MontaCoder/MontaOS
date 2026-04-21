@@ -16,6 +16,8 @@ export default class Audio {
         ambience: AmbienceAudio;
     };
     scene: THREE.Scene;
+    private unsubscribeLoadingDone: EventUnsubscribe;
+    private unsubscribeMuteToggle: EventUnsubscribe;
 
     constructor() {
         this.application = Application.getInstance();
@@ -30,7 +32,7 @@ export default class Audio {
             ambience: new AmbienceAudio(this),
         };
 
-        UIEventBus.on('loadingScreenDone', () => {
+        this.unsubscribeLoadingDone = UIEventBus.on('loadingScreenDone', () => {
             setTimeout(() => {
                 const AudioContext =
                     window.AudioContext ||
@@ -44,7 +46,7 @@ export default class Audio {
             }, 100);
         });
 
-        UIEventBus.on('muteToggle', (mute: boolean) => {
+        this.unsubscribeMuteToggle = UIEventBus.on('muteToggle', (mute) => {
             this.listener.setMasterVolume(mute ? 0 : 1);
         });
     }
@@ -191,5 +193,26 @@ export default class Audio {
             const _key = key as keyof typeof this.audioSources;
             this.audioSources[_key].update();
         }
+    }
+
+    destroy() {
+        this.unsubscribeLoadingDone();
+        this.unsubscribeMuteToggle();
+
+        for (const key in this.audioSources) {
+            this.audioSources[key as keyof typeof this.audioSources].destroy();
+        }
+
+        for (const key in this.audioPool) {
+            const audio = this.audioPool[key];
+            if (audio.isPlaying) {
+                audio.stop();
+            }
+            audio.disconnect();
+        }
+
+        this.audioPool = {};
+        this.listener.removeFromParent();
+        this.context?.close();
     }
 }

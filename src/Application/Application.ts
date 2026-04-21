@@ -100,8 +100,12 @@ export default class Application {
     }
 
     destroy() {
-        this.sizes.off('resize');
-        this.time.off('tick');
+        this.time.destroy();
+        this.sizes.destroy();
+        this.camera.destroy();
+        this.world.destroy();
+        this.ui.destroy();
+        this.mouse.destroy();
 
         // Traverse the whole scene
         this.scene.traverse((child) => {
@@ -109,20 +113,28 @@ export default class Application {
             if (child instanceof THREE.Mesh) {
                 child.geometry.dispose();
 
-                // Loop through the material properties
-                for (const key in child.material) {
-                    const value = child.material[key];
+                const materials = Array.isArray(child.material)
+                    ? child.material
+                    : [child.material];
 
-                    // Test if there is a dispose function
-                    if (value && typeof value.dispose === 'function') {
-                        value.dispose();
+                materials.forEach((material) => {
+                    for (const key in material) {
+                        const value = material[key as keyof typeof material];
+                        const disposable = value as
+                            | { dispose?: () => void }
+                            | undefined;
+                        if (typeof disposable?.dispose === 'function') {
+                            disposable.dispose();
+                        }
                     }
-                }
+                    material.dispose();
+                });
             }
         });
 
-        this.renderer.instance.dispose();
+        this.renderer.destroy();
 
         if (this.debug.active) this.debug.ui.destroy();
+        this.stats?.dom.remove();
     }
 }

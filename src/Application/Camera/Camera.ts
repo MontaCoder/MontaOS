@@ -9,6 +9,7 @@ import Resources from '../Utils/Resources';
 import UIEventBus from '../UI/EventBus';
 import Time from '../Utils/Time';
 import BezierEasing from 'bezier-easing';
+import { CameraKey } from './cameraConfig';
 import {
     CameraKeyframeInstance,
     MonitorKeyframe,
@@ -18,13 +19,6 @@ import {
     OrbitControlsStart,
 } from './CameraKeyframes';
 
-export enum CameraKey {
-    IDLE = 'idle',
-    MONITOR = 'monitor',
-    LOADING = 'loading',
-    DESK = 'desk',
-    ORBIT_CONTROLS_START = 'orbitControlsStart',
-}
 export default class Camera extends EventEmitter {
     application: Application;
     sizes: Sizes;
@@ -43,6 +37,9 @@ export default class Camera extends EventEmitter {
     currentKeyframe: CameraKey | undefined;
     targetKeyframe: CameraKey | undefined;
     keyframes: { [key in CameraKey]: CameraKeyframeInstance };
+    private activeTweens: { stop: () => void }[];
+    private unsubscribeListeners: EventUnsubscribe[];
+    private documentMouseDownHandler: (event: MouseEvent) => void;
 
     constructor() {
         super();
@@ -57,21 +54,22 @@ export default class Camera extends EventEmitter {
         this.focalPoint = new THREE.Vector3(0, 0, 0);
 
         this.freeCam = false;
+        this.activeTweens = [];
+        this.unsubscribeListeners = [];
 
         this.keyframes = {
-            idle: new IdleKeyframe(),
-            monitor: new MonitorKeyframe(),
-            loading: new LoadingKeyframe(),
-            desk: new DeskKeyframe(),
-            orbitControlsStart: new OrbitControlsStart(),
+            [CameraKey.IDLE]: new IdleKeyframe(),
+            [CameraKey.MONITOR]: new MonitorKeyframe(),
+            [CameraKey.LOADING]: new LoadingKeyframe(),
+            [CameraKey.DESK]: new DeskKeyframe(),
+            [CameraKey.ORBIT_CONTROLS_START]: new OrbitControlsStart(),
         };
 
-        document.addEventListener('mousedown', (event) => {
+        this.documentMouseDownHandler = (event) => {
             event.preventDefault();
             if ((event.target as HTMLElement | null)?.id === 'prevent-click') {
                 return;
             }
-            // print target and current keyframe
             if (
                 this.currentKeyframe === CameraKey.IDLE ||
                 this.targetKeyframe === CameraKey.IDLE
@@ -83,7 +81,9 @@ export default class Camera extends EventEmitter {
             ) {
                 this.transition(CameraKey.IDLE);
             }
-        });
+        };
+
+        document.addEventListener('mousedown', this.documentMouseDownHandler);
 
         this.setPostLoadTransition();
         this.setInstance();
@@ -99,7 +99,10 @@ export default class Camera extends EventEmitter {
     ) {
         if (this.currentKeyframe === key) return;
 
-        if (this.targetKeyframe) TWEEN.removeAll();
+        if (this.targetKeyframe) {
+            this.activeTweens.forEach((tween) => tween.stop());
+            this.activeTweens = [];
+        }
 
         this.currentKeyframe = undefined;
         this.targetKeyframe = key;
@@ -110,8 +113,10 @@ export default class Camera extends EventEmitter {
             .to(keyframe.position, duration)
             .easing(easing || TWEEN.Easing.Quintic.InOut)
             .onComplete(() => {
+                if (this.targetKeyframe !== key) return;
                 this.currentKeyframe = key;
                 this.targetKeyframe = undefined;
+                this.activeTweens = [];
                 if (callback) callback();
             });
 
@@ -121,6 +126,7 @@ export default class Camera extends EventEmitter {
 
         posTween.start();
         focTween.start();
+        this.activeTweens = [posTween, focTween];
     }
 
     setInstance() {
@@ -136,23 +142,25 @@ export default class Camera extends EventEmitter {
     }
 
     setMonitorListeners() {
-        this.on('enterMonitor', () => {
+        const enterMonitor = () => {
             this.transition(
                 CameraKey.MONITOR,
                 2000,
                 BezierEasing(0.13, 0.99, 0, 1)
             );
             UIEventBus.dispatch('enterMonitor', {});
-        });
-        this.on('leftMonitor', () => {
+        };
+        const leftMonitor = () => {
             this.transition(CameraKey.DESK);
             UIEventBus.dispatch('leftMonitor', {});
-        });
+        };
+
+        this.on('enterMonitor', enterMonitor);
+        this.on('leftMonitor', leftMonitor);
     }
 
     setFreeCamListeners() {
-        UIEventBus.on('freeCamToggle', (toggle: boolean) => {
-            // if (toggle === this.freeCam) return;
+        const unsubscribe = UIEventBus.on('freeCamToggle', (toggle: boolean) => {
             if (toggle) {
                 this.transition(
                     CameraKey.ORBIT_CONTROLS_START,
@@ -180,12 +188,16 @@ export default class Camera extends EventEmitter {
                 if (webgl) webgl.style.pointerEvents = 'none';
             }
         });
+
+        this.unsubscribeListeners.push(unsubscribe);
     }
 
     setPostLoadTransition() {
-        UIEventBus.on('loadingScreenDone', () => {
+        const unsubscribe = UIEventBus.on('loadingScreenDone', () => {
             this.transition(CameraKey.IDLE, 2500, TWEEN.Easing.Exponential.Out);
         });
+
+        this.unsubscribeListeners.push(unsubscribe);
     }
 
     resize() {
@@ -239,5 +251,16 @@ export default class Camera extends EventEmitter {
 
         this.instance.position.copy(this.position);
         this.instance.lookAt(this.focalPoint);
+    }
+
+    destroy() {
+        document.removeEventListener(
+            'mousedown',
+            this.documentMouseDownHandler
+        );
+        this.unsubscribeListeners.forEach((unsubscribe) => unsubscribe());
+        this.activeTweens.forEach((tween) => tween.stop());
+        this.orbitControls?.dispose();
+        super.destroy();
     }
 }
