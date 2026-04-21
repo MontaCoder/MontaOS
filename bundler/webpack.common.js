@@ -7,10 +7,17 @@ module.exports = {
     entry: path.resolve(__dirname, '../src/script.ts'),
     output: {
         hashFunction: 'xxhash64',
-        filename: 'bundle.[contenthash].js',
+        filename: 'js/[name].[contenthash:8].js',
+        chunkFilename: 'js/[name].[contenthash:8].js',
         path: path.resolve(__dirname, '../public'),
     },
     devtool: 'source-map',
+    cache: {
+        type: 'filesystem',
+        buildDependencies: {
+            config: [__filename],
+        },
+    },
     plugins: [
         new CopyWebpackPlugin({
             patterns: [{ from: path.resolve(__dirname, '../static') }],
@@ -63,9 +70,9 @@ module.exports = {
             // Audio
             {
                 test: /\.(mp3|wav)$/,
-                loader: 'file-loader',
-                options: {
-                    name: '[path][name].[ext]',
+                type: 'asset/resource',
+                generator: {
+                    filename: '[path][name][ext]',
                 },
             },
             // Fonts
@@ -80,7 +87,7 @@ module.exports = {
             {
                 test: /\.(glsl|vs|fs|vert|frag)$/,
                 exclude: /node_modules/,
-                use: ['glslify-import-loader', 'raw-loader', 'glslify-loader'],
+                type: 'asset/source',
             },
         ],
     },

@@ -36,7 +36,7 @@ export default class Decor {
             console.log(this.mouse);
             const ray = new THREE.Raycaster();
             ray.setFromCamera(
-                { x: this.mouse.x, y: this.mouse.y },
+                new THREE.Vector2(this.mouse.x, this.mouse.y),
                 this.camera.instance
             );
             console.log(ray);
@@ -92,7 +92,7 @@ export default class Decor {
 
         // create hitbox
         const hitbox = new THREE.Mesh(
-            new THREE.BoxBufferGeometry(size.x, size.y, size.z),
+            new THREE.BoxGeometry(size.x, size.y, size.z),
             hitboxMaterial
         );
 

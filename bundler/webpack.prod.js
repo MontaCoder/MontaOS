@@ -6,6 +6,37 @@ module.exports = merge(
     commonConfiguration,
     {
         mode: 'production',
+        devtool: false,
+        optimization: {
+            moduleIds: 'deterministic',
+            chunkIds: 'deterministic',
+            runtimeChunk: 'single',
+            usedExports: true,
+            sideEffects: true,
+            splitChunks: {
+                chunks: 'all',
+                cacheGroups: {
+                    three: {
+                        test: /[\\/]node_modules[\\/]three[\\/]/,
+                        name: 'three-vendor',
+                        priority: 30,
+                        enforce: true,
+                    },
+                    ui: {
+                        test: /[\\/]node_modules[\\/](react|react-dom|framer-motion|popmotion|framesync|style-value-types|hey-listen|tslib)[\\/]/,
+                        name: 'ui-vendor',
+                        priority: 20,
+                        enforce: true,
+                    },
+                    vendors: {
+                        test: /[\\/]node_modules[\\/]/,
+                        name: 'vendor',
+                        priority: 10,
+                        reuseExistingChunk: true,
+                    },
+                },
+            },
+        },
         plugins:
         [
             new CleanWebpackPlugin()
