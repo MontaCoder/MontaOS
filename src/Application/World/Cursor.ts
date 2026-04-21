@@ -9,7 +9,7 @@ export default class Cursor {
     mouse: THREE.Vector2;
 
     constructor() {
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.scene = this.application.scene;
         this.camera = this.application.camera;
         this.mouse = new THREE.Vector2(0, 0);

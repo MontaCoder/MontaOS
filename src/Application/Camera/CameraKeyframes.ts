@@ -49,7 +49,7 @@ export class MonitorKeyframe extends CameraKeyframeInstance {
     constructor() {
         const keyframe = keys.monitor;
         super(keyframe);
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.sizes = this.application.sizes;
         this.origin = new THREE.Vector3().copy(keyframe.position);
         this.targetPos = new THREE.Vector3().copy(keyframe.position);
@@ -83,7 +83,7 @@ export class DeskKeyframe extends CameraKeyframeInstance {
     constructor() {
         const keyframe = keys.desk;
         super(keyframe);
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.mouse = this.application.mouse;
         this.sizes = this.application.sizes;
         this.origin = new THREE.Vector3().copy(keyframe.position);

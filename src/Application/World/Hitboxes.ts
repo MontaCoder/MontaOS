@@ -16,13 +16,15 @@ export default class Decor {
     camera: Camera;
     mouse: Mouse;
     raycaster: THREE.Raycaster;
+    debugActive: boolean;
 
     constructor() {
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.scene = this.application.scene;
         this.camera = this.application.camera;
         this.mouse = this.application.mouse;
         this.raycaster = new THREE.Raycaster();
+        this.debugActive = this.application.debug.active;
 
         this.createRaycaster();
         this.createComputerHitbox();
@@ -31,17 +33,21 @@ export default class Decor {
     createRaycaster() {
         window.addEventListener('mousedown', (event) => {
             event.preventDefault();
-            console.log(this.camera.instance.position);
 
-            console.log(this.mouse);
             const ray = new THREE.Raycaster();
             ray.setFromCamera(
                 new THREE.Vector2(this.mouse.x, this.mouse.y),
                 this.camera.instance
             );
-            console.log(ray);
             const intersects = ray.intersectObjects(this.scene.children);
-            console.log(intersects);
+            if (this.debugActive) {
+                console.log({
+                    cameraPosition: this.camera.instance.position,
+                    mouse: this.mouse,
+                    ray,
+                    intersects,
+                });
+            }
             // this.raycaster.setFromCamera(this.mouse, this.camera.instance);
             // const intersects = this.raycaster.intersectObjects(
             //     this.scene.children

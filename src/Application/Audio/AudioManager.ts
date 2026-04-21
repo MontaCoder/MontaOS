@@ -8,7 +8,7 @@ const DEFAULT_REF_DISTANCE = 10000;
 export default class Audio {
     application: Application;
     listener: THREE.AudioListener;
-    context: AudioContext;
+    context: AudioContext | undefined;
     loadedAudio: { [key in string]: LoadedAudio };
     audioPool: { [key in string]: THREE.PositionalAudio | THREE.Audio };
     audioSources: {
@@ -18,7 +18,7 @@ export default class Audio {
     scene: THREE.Scene;
 
     constructor() {
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.listener = new THREE.AudioListener();
         this.application.camera.instance.add(this.listener);
         this.loadedAudio = this.application.resources.items.audio;
@@ -33,8 +33,12 @@ export default class Audio {
         UIEventBus.on('loadingScreenDone', () => {
             setTimeout(() => {
                 const AudioContext =
-                    // @ts-ignore
-                    window.AudioContext || window.webkitAudioContext;
+                    window.AudioContext ||
+                    (window as Window & {
+                        webkitAudioContext?: typeof window.AudioContext;
+                    }).webkitAudioContext;
+                if (!AudioContext) return;
+
                 this.context = new AudioContext();
                 this.context.resume();
             }, 100);
@@ -65,21 +69,21 @@ export default class Audio {
 
         // Get the audio source
         sourceName = this.getRandomVariant(sourceName);
+        if (!sourceName) return '';
 
         // Setup
         const buffer = this.loadedAudio[sourceName];
+        if (!buffer) return '';
+
         const poolKey = sourceName + '_' + Object.keys(this.audioPool).length;
 
-        let audio: THREE.Audio<any> | THREE.PositionalAudio = new THREE.Audio(
-            this.listener
-        );
+        let audio: THREE.Audio<GainNode> | THREE.PositionalAudio =
+            new THREE.Audio<GainNode>(this.listener);
 
         if (options.position) {
             audio = new THREE.PositionalAudio(this.listener);
 
-            // @ts-ignore
             audio.setRefDistance(options.refDistance || DEFAULT_REF_DISTANCE);
-            // @ts-ignore
             // audio.setDistanceModel('linear');
 
             const extraMaterialOptions = !POS_DEBUG
@@ -173,7 +177,7 @@ export default class Audio {
     }
 
     getRandomVariant(sourceName: string) {
-        const variants = [];
+        const variants: string[] = [];
         for (const key in this.loadedAudio) {
             if (key.includes(sourceName)) {
                 variants.push(key);

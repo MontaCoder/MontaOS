@@ -18,8 +18,7 @@ export class ComputerAudio extends AudioSource {
     constructor(manager: AudioManager) {
         super(manager);
 
-        document.addEventListener('mousedown', (event) => {
-            // @ts-ignore
+        document.addEventListener('mousedown', (event: ComputerMouseEvent) => {
             if (event.inComputer) {
                 this.manager.playAudio('mouseDown', {
                     volume: 0.8,
@@ -28,8 +27,7 @@ export class ComputerAudio extends AudioSource {
             }
         });
 
-        document.addEventListener('mouseup', (event) => {
-            // @ts-ignore
+        document.addEventListener('mouseup', (event: ComputerMouseEvent) => {
             if (event.inComputer) {
                 this.manager.playAudio('mouseUp', {
                     volume: 0.8,
@@ -38,14 +36,15 @@ export class ComputerAudio extends AudioSource {
             }
         });
 
-        document.addEventListener('keyup', (event) => {
-            // @ts-ignore
+        document.addEventListener('keyup', (event: ComputerEvent) => {
             if (event.inComputer) {
                 this.lastKey = '';
             }
         });
 
-        document.addEventListener('keydown', (event) => {
+        document.addEventListener('keydown', (event: ComputerEvent) => {
+            if (!event.key) return;
+
             if (event.key.includes('_AUTO_')) {
                 this.manager.playAudio('ccType', {
                     volume: 0.1,
@@ -57,7 +56,6 @@ export class ComputerAudio extends AudioSource {
             if (this.lastKey === event.key) return;
             this.lastKey = event.key;
 
-            // @ts-ignore
             if (event.inComputer) {
                 this.manager.playAudio('keyboardKeydown', {
                     volume: 0.8,
@@ -69,7 +67,7 @@ export class ComputerAudio extends AudioSource {
 }
 
 export class AmbienceAudio extends AudioSource {
-    poolKey: string;
+    poolKey: string | undefined;
 
     constructor(manager: AudioManager) {
         super(manager);
@@ -118,6 +116,8 @@ export class AmbienceAudio extends AudioSource {
 
         const volume = this.mapValues(distance, 1200, 10000, 0, 0.2);
         const volumeClamped = Math.min(Math.max(volume, 0.05), 0.1);
+
+        if (!this.poolKey) return;
 
         this.manager.setAudioFilterFrequency(this.poolKey, freq - 3000);
         this.manager.setAudioVolume(this.poolKey, volumeClamped);

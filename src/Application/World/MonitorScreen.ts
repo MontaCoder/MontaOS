@@ -14,6 +14,20 @@ const IFRAME_SIZE = {
     w: SCREEN_SIZE.w - IFRAME_PADDING,
     h: SCREEN_SIZE.h - IFRAME_PADDING,
 };
+const FORWARDED_MESSAGE_TYPES = new Set([
+    'mousemove',
+    'mousedown',
+    'mouseup',
+    'keydown',
+    'keyup',
+]);
+
+type MonitorMessage = {
+    type?: string;
+    clientX?: number;
+    clientY?: number;
+    key?: string;
+};
 
 export default class MonitorScreen extends EventEmitter {
     application: Application;
@@ -33,10 +47,12 @@ export default class MonitorScreen extends EventEmitter {
     mouseClickInProgress: boolean;
     dimmingPlane: THREE.Mesh;
     videoTextures: { [key in string]: THREE.VideoTexture };
+    planeNormal: THREE.Vector3;
+    viewVector: THREE.Vector3;
 
     constructor() {
         super();
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.scene = this.application.scene;
         this.cssScene = this.application.cssScene;
         this.sizes = this.application.sizes;
@@ -48,6 +64,10 @@ export default class MonitorScreen extends EventEmitter {
         this.videoTextures = {};
         this.mouseClickInProgress = false;
         this.shouldLeaveMonitor = false;
+        this.prevInComputer = false;
+        this.inComputer = false;
+        this.planeNormal = new THREE.Vector3(0, 0, 1);
+        this.viewVector = new THREE.Vector3();
 
         // Create screen
         this.initializeScreenEvents();
@@ -60,16 +80,14 @@ export default class MonitorScreen extends EventEmitter {
     initializeScreenEvents() {
         document.addEventListener(
             'mousemove',
-            (event) => {
-                // @ts-ignore
-                const id = event.target.id;
-                if (id === 'computer-screen') {
-                    // @ts-ignore
-                    event.inComputer = true;
+            (event: MouseEvent) => {
+                const computerEvent = event as ComputerMouseEvent;
+                const target = event.target as HTMLElement | null;
+                if (target?.id === 'computer-screen') {
+                    computerEvent.inComputer = true;
                 }
 
-                // @ts-ignore
-                this.inComputer = event.inComputer;
+                this.inComputer = Boolean(computerEvent.inComputer);
 
                 if (this.inComputer && !this.prevInComputer) {
                     this.camera.trigger('enterMonitor');
@@ -93,7 +111,7 @@ export default class MonitorScreen extends EventEmitter {
                     this.shouldLeaveMonitor = false;
                 }
 
-                this.application.mouse.trigger('mousemove', [event]);
+                this.application.mouse.trigger('mousemove', [computerEvent]);
 
                 this.prevInComputer = this.inComputer;
             },
@@ -101,10 +119,10 @@ export default class MonitorScreen extends EventEmitter {
         );
         document.addEventListener(
             'mousedown',
-            (event) => {
-                // @ts-ignore
-                this.inComputer = event.inComputer;
-                this.application.mouse.trigger('mousedown', [event]);
+            (event: MouseEvent) => {
+                const computerEvent = event as ComputerMouseEvent;
+                this.inComputer = Boolean(computerEvent.inComputer);
+                this.application.mouse.trigger('mousedown', [computerEvent]);
 
                 this.mouseClickInProgress = true;
                 this.prevInComputer = this.inComputer;
@@ -113,10 +131,10 @@ export default class MonitorScreen extends EventEmitter {
         );
         document.addEventListener(
             'mouseup',
-            (event) => {
-                // @ts-ignore
-                this.inComputer = event.inComputer;
-                this.application.mouse.trigger('mouseup', [event]);
+            (event: MouseEvent) => {
+                const computerEvent = event as ComputerMouseEvent;
+                this.inComputer = Boolean(computerEvent.inComputer);
+                this.application.mouse.trigger('mouseup', [computerEvent]);
 
                 if (this.shouldLeaveMonitor) {
                     this.camera.trigger('leftMonitor');
@@ -148,33 +166,31 @@ export default class MonitorScreen extends EventEmitter {
         iframe.onload = () => {
             if (iframe.contentWindow) {
                 window.addEventListener('message', (event) => {
-                    var evt = new CustomEvent(event.data.type, {
+                    if (!this.isAllowedMonitorMessage(event, iframe)) return;
+
+                    const data = event.data as MonitorMessage;
+                    const evt = new CustomEvent(data.type || '', {
                         bubbles: true,
                         cancelable: false,
-                    });
+                    }) as ComputerEvent;
 
-                    // @ts-ignore
                     evt.inComputer = true;
-                    if (event.data.type === 'mousemove') {
-                        var clRect = iframe.getBoundingClientRect();
+                    if (data.type === 'mousemove') {
+                        const clRect = iframe.getBoundingClientRect();
                         const { top, left, width, height } = clRect;
                         const widthRatio = width / IFRAME_SIZE.w;
                         const heightRatio = height / IFRAME_SIZE.h;
 
-                        // @ts-ignore
                         evt.clientX = Math.round(
-                            event.data.clientX * widthRatio + left
+                            (data.clientX || 0) * widthRatio + left
                         );
-                        //@ts-ignore
                         evt.clientY = Math.round(
-                            event.data.clientY * heightRatio + top
+                            (data.clientY || 0) * heightRatio + top
                         );
-                    } else if (event.data.type === 'keydown') {
-                        // @ts-ignore
-                        evt.key = event.data.key;
-                    } else if (event.data.type === 'keyup') {
-                        // @ts-ignore
-                        evt.key = event.data.key;
+                    } else if (data.type === 'keydown') {
+                        evt.key = data.key;
+                    } else if (data.type === 'keyup') {
+                        evt.key = data.key;
                     }
 
                     iframe.dispatchEvent(evt);
@@ -211,6 +227,25 @@ export default class MonitorScreen extends EventEmitter {
 
         // Create CSS plane
         this.createCssPlane(container);
+    }
+
+    isAllowedMonitorMessage(
+        event: MessageEvent<MonitorMessage>,
+        iframe: HTMLIFrameElement
+    ) {
+        const data = event.data;
+        if (!data || !data.type || !FORWARDED_MESSAGE_TYPES.has(data.type)) {
+            return false;
+        }
+
+        if (event.source === window) return true;
+        if (event.source !== iframe.contentWindow) return false;
+
+        try {
+            return event.origin === new URL(iframe.src).origin;
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -299,7 +334,8 @@ export default class MonitorScreen extends EventEmitter {
         let maxOffset = -1;
 
         // Add the texture layers to the screen
-        for (const [_, layer] of Object.entries(layers)) {
+        for (const key of Object.keys(layers)) {
+            const layer = layers[key as keyof typeof layers];
             const offset = layer.offset * scaleFactor;
             this.addTextureLayer(
                 layer.texture,
@@ -428,7 +464,8 @@ export default class MonitorScreen extends EventEmitter {
         };
 
         // Add each of the planes
-        for (const [_, plane] of Object.entries(planes)) {
+        for (const key of Object.keys(planes)) {
+            const plane = planes[key as keyof typeof planes];
             this.createEnclosingPlane(plane);
         }
     }
@@ -496,13 +533,11 @@ export default class MonitorScreen extends EventEmitter {
 
     update() {
         if (this.dimmingPlane) {
-            const planeNormal = new THREE.Vector3(0, 0, 1);
-            const viewVector = new THREE.Vector3();
-            viewVector.copy(this.camera.instance.position);
-            viewVector.sub(this.position);
-            viewVector.normalize();
+            this.viewVector.copy(this.camera.instance.position);
+            this.viewVector.sub(this.position);
+            this.viewVector.normalize();
 
-            const dot = viewVector.dot(planeNormal);
+            const dot = this.viewVector.dot(this.planeNormal);
 
             // calculate the distance from the camera vector to the plane vector
             const dimPos = this.dimmingPlane.position;
@@ -518,9 +553,11 @@ export default class MonitorScreen extends EventEmitter {
 
             const DIM_FACTOR = 0.7;
 
-            // @ts-ignore
-            this.dimmingPlane.material.opacity =
-                (1 - opacity) * DIM_FACTOR + (1 - dot) * DIM_FACTOR;
+            const material = this.dimmingPlane.material;
+            if (material instanceof THREE.MeshBasicMaterial) {
+                material.opacity =
+                    (1 - opacity) * DIM_FACTOR + (1 - dot) * DIM_FACTOR;
+            }
         }
     }
 }

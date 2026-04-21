@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import Application from '../Application';
 import Resources from '../Utils/Resources';
 import ComputerSetup from './Computer';
@@ -23,7 +24,7 @@ export default class World {
     audioManager: AudioManager;
 
     constructor() {
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.scene = this.application.scene;
         this.resources = this.application.resources;
         // Wait for resources

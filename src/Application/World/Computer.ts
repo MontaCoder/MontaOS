@@ -10,7 +10,7 @@ export default class Computer {
     bakedModel: BakedModel;
 
     constructor() {
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.scene = this.application.scene;
         this.resources = this.application.resources;
 

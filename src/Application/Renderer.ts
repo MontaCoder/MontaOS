@@ -3,10 +3,7 @@ import { CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import Application from './Application';
 import Sizes from './Utils/Sizes';
 import Camera from './Camera/Camera';
-import UIEventBus from './UI/EventBus';
-// @ts-ignore
 import screenVert from './Shaders/screen/vertex.glsl';
-// @ts-ignore
 import screenFrag from './Shaders/screen/fragment.glsl';
 import Time from './Utils/Time';
 
@@ -24,11 +21,11 @@ export default class Renderer {
     cssInstance: CSS3DRenderer;
     raiseExposure: boolean;
     uniforms: {
-        [uniform: string]: THREE.IUniform<any>;
+        [uniform: string]: THREE.IUniform<number>;
     };
 
     constructor() {
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.time = this.application.time;
         this.sizes = this.application.sizes;
         this.scene = this.application.scene;
@@ -113,7 +110,6 @@ export default class Renderer {
     }
 
     update() {
-        this.application.camera.instance.updateProjectionMatrix();
         if (this.uniforms) {
             this.uniforms.u_time.value = Math.sin(this.time.current * 0.01);
         }

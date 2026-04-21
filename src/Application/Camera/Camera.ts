@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import Application from '../Application';
 import Sizes from '../Utils/Sizes';
 import EventEmitter from '../Utils/EventEmitter';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import TWEEN from '@tweenjs/tween.js';
 import Renderer from '../Renderer';
 import Resources from '../Utils/Resources';
@@ -46,7 +46,7 @@ export default class Camera extends EventEmitter {
 
     constructor() {
         super();
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.sizes = this.application.sizes;
         this.scene = this.application.scene;
         this.renderer = this.application.renderer;
@@ -68,8 +68,9 @@ export default class Camera extends EventEmitter {
 
         document.addEventListener('mousedown', (event) => {
             event.preventDefault();
-            // @ts-ignore
-            if (event.target.id === 'prevent-click') return;
+            if ((event.target as HTMLElement | null)?.id === 'prevent-click') {
+                return;
+            }
             // print target and current keyframe
             if (
                 this.currentKeyframe === CameraKey.IDLE ||
@@ -93,7 +94,7 @@ export default class Camera extends EventEmitter {
     transition(
         key: CameraKey,
         duration: number = 1000,
-        easing?: any,
+        easing?: (amount: number) => number,
         callback?: () => void
     ) {
         if (this.currentKeyframe === key) return;
@@ -166,8 +167,8 @@ export default class Camera extends EventEmitter {
                         this.freeCam = true;
                     }
                 );
-                // @ts-ignore
-                document.getElementById('webgl').style.pointerEvents = 'auto';
+                const webgl = document.getElementById('webgl');
+                if (webgl) webgl.style.pointerEvents = 'auto';
             } else {
                 this.freeCam = false;
                 this.transition(
@@ -175,8 +176,8 @@ export default class Camera extends EventEmitter {
                     4000,
                     TWEEN.Easing.Exponential.Out
                 );
-                // @ts-ignore
-                document.getElementById('webgl').style.pointerEvents = 'none';
+                const webgl = document.getElementById('webgl');
+                if (webgl) webgl.style.pointerEvents = 'none';
             }
         });
     }
