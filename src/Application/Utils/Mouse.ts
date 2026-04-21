@@ -17,12 +17,13 @@ export default class Mouse extends EventEmitter {
         // this.audio = this.application.world.audio;
 
         // Resize event
-        this.on('mousemove', (event: any) => {
-            if (event.clientX && event.clientY) {
-                this.x = event.clientX;
-                this.y = event.clientY;
+        this.on('mousemove', (event) => {
+            const mouseEvent = event as ComputerMouseEvent;
+            if (mouseEvent.clientX && mouseEvent.clientY) {
+                this.x = mouseEvent.clientX;
+                this.y = mouseEvent.clientY;
             }
-            this.inComputer = event.inComputer ? true : false;
+            this.inComputer = mouseEvent.inComputer ? true : false;
         });
     }
 }

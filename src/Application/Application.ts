@@ -7,7 +7,6 @@ import Camera from './Camera/Camera';
 import Renderer from './Renderer';
 import Mouse from './Utils/Mouse';
 
-//@ts-ignore
 import World from './World/World';
 import Resources from './Utils/Resources';
 
@@ -36,6 +35,10 @@ export default class Application {
     ui: UI;
     stats: Stats | undefined;
 
+    static getInstance() {
+        return new Application();
+    }
+
     constructor() {
         // Singleton
         if (instance) {
@@ -45,7 +48,6 @@ export default class Application {
         instance = this;
 
         // Global access
-        //@ts-ignore
         // window.Application = this;
 
         // Setup

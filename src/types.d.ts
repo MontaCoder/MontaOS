@@ -5,7 +5,27 @@ type Resource =
     | AudioResource;
 
 declare interface StyleSheetCSS {
-    [key: string]: React.CSSProperties;
+    [key: string]: import('react').CSSProperties;
+}
+
+declare module '*.svg' {
+    const src: string;
+    export default src;
+}
+
+declare module '*.glsl' {
+    const src: string;
+    export default src;
+}
+
+declare module '*.vert' {
+    const src: string;
+    export default src;
+}
+
+declare module '*.frag' {
+    const src: string;
+    export default src;
 }
 
 type TextureResource = {
@@ -33,14 +53,14 @@ type AudioResource = {
 };
 
 type EnclosingPlane = {
-    size: THREE.Vector2;
-    position: THREE.Vector3;
-    rotation: THREE.Euler;
+    size: import('three').Vector2;
+    position: import('three').Vector3;
+    rotation: import('three').Euler;
 };
 
 type CameraKeyframe = {
-    position: THREE.Vector3;
-    focalPoint: THREE.Vector3;
+    position: import('three').Vector3;
+    focalPoint: import('three').Vector3;
 };
 
 type LoadedResource =
@@ -49,12 +69,46 @@ type LoadedResource =
     | LoadedModel
     | LoadedAudio;
 
-type LoadedTexture = THREE.Texture;
+type LoadedTexture = import('three').Texture;
 
 type LoadedModel = import('three/examples/jsm/loaders/GLTFLoader').GLTF;
 
-type LoadedCubeTexture = THREE.CubeTexture;
+type LoadedCubeTexture = import('three').CubeTexture;
 
 type LoadedAudio = AudioBuffer;
 
-type ResourceType = 'texture' | 'cubeTexture' | 'gltfModel';
+type ResourceType = 'texture' | 'cubeTexture' | 'gltfModel' | 'audio';
+
+type UIEventMap = {
+    loadedSource: {
+        sourceName: string;
+        progress: number;
+        toLoad: number;
+        loaded: number;
+    };
+    loadingFailed: {
+        sourceName: string;
+        path: string | string[];
+        error: unknown;
+    };
+    loadingScreenDone: {};
+    enterMonitor: {};
+    leftMonitor: {};
+    freeCamToggle: boolean;
+    muteToggle: boolean;
+};
+
+type UIEventName = keyof UIEventMap;
+
+type EventUnsubscribe = () => void;
+
+interface ComputerEvent extends Event {
+    inComputer?: boolean;
+    clientX?: number;
+    clientY?: number;
+    key?: string;
+}
+
+interface ComputerMouseEvent extends MouseEvent {
+    inComputer?: boolean;
+}

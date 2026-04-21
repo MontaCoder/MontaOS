@@ -1,8 +1,7 @@
+type EventCallback = (...args: unknown[]) => unknown;
+
 export default class EventEmitter {
-    /**
-     * Types
-     */
-    callbacks: { [key in string]: { [key in string]: (() => any)[] } };
+    callbacks: { [namespace: string]: { [event: string]: EventCallback[] } };
 
     /**
      * Constructor
@@ -12,7 +11,7 @@ export default class EventEmitter {
         this.callbacks.base = {};
     }
 
-    on(_names: string, callback: (...args: any[]) => any) {
+    on(_names: string, callback: EventCallback) {
         // Errors
         if (typeof _names === 'undefined' || _names === '') {
             console.warn('wrong names');
@@ -109,7 +108,7 @@ export default class EventEmitter {
         return this;
     }
 
-    trigger(_name: string, _args?: any[]) {
+    trigger(_name: string, _args?: unknown[]) {
         // Errors
         if (typeof _name === 'undefined' || _name === '') {
             console.warn('wrong name');
@@ -117,11 +116,11 @@ export default class EventEmitter {
         }
 
         const that = this;
-        let finalResult: any = null;
-        let result = null;
+        let finalResult: unknown;
+        let result: unknown = null;
 
         // Default args
-        const args: any = !(_args instanceof Array) ? [] : _args;
+        const args = !(_args instanceof Array) ? [] : _args;
 
         // Resolve names (should on have one event)
         let _names = this.resolveNames(_name);

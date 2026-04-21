@@ -13,17 +13,20 @@ export default class Loading extends EventEmitter {
     constructor() {
         super();
 
-        this.application = new Application();
+        this.application = Application.getInstance();
         this.resources = this.application.resources;
 
         this.scene = this.application.scene;
         this.on('loadedSource', (sourceName, loaded, toLoad) => {
-            this.progress = loaded / toLoad;
+            const loadedCount = Number(loaded);
+            const totalToLoad = Number(toLoad);
+            const resourceName = String(sourceName);
+            this.progress = loadedCount / totalToLoad;
             UIEventBus.dispatch('loadedSource', {
-                sourceName: sourceName,
-                progress: loaded / toLoad,
-                toLoad: toLoad,
-                loaded: loaded,
+                sourceName: resourceName,
+                progress: loadedCount / totalToLoad,
+                toLoad: totalToLoad,
+                loaded: loadedCount,
             });
         });
     }

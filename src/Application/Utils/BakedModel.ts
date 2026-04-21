@@ -16,11 +16,14 @@ export default class BakedModel {
             map: this.texture,
         });
 
-        this.model.scene.traverse((child) => {
+        this.model.scene.traverse((child: THREE.Object3D) => {
             if (child instanceof THREE.Mesh) {
-                if (scale) child.scale.set(scale, scale, scale);
-                child.material.map = this.texture;
-                child.material = this.material;
+                const mesh = child as THREE.Mesh;
+                if (scale) mesh.scale.set(scale, scale, scale);
+
+                const material = mesh.material as THREE.MeshBasicMaterial;
+                material.map = this.texture;
+                mesh.material = this.material;
             }
         });
 

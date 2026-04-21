@@ -1,12 +1,22 @@
 const UIEventBus = {
-    on(event: string, callback: (...args: any[]) => any) {
-        // @ts-ignore
-        document.addEventListener(event, (e) => callback(e.detail));
+    on<K extends UIEventName>(
+        event: K,
+        callback: (data: UIEventMap[K]) => void
+    ): EventUnsubscribe {
+        const listener = (e: Event) => {
+            callback((e as CustomEvent<UIEventMap[K]>).detail);
+        };
+
+        document.addEventListener(event, listener);
+
+        return () => {
+            document.removeEventListener(event, listener);
+        };
     },
-    dispatch(event: string, data: any) {
+    dispatch<K extends UIEventName>(event: K, data: UIEventMap[K]) {
         document.dispatchEvent(new CustomEvent(event, { detail: data }));
     },
-    remove(event: string, callback: (...args: any[]) => any) {
+    remove<K extends UIEventName>(event: K, callback: EventListener) {
         document.removeEventListener(event, callback);
     },
 };
