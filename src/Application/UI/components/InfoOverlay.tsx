@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import FreeCamToggle from './FreeCamToggle';
 import MuteToggle from './MuteToggle';
+import { sendAutoKey, useTypewriter } from '../hooks/useTypewriter';
 
 interface InfoOverlayProps {
     visible: boolean;
@@ -8,7 +9,6 @@ interface InfoOverlayProps {
 
 const NAME_TEXT = 'Montassar Hajri';
 const TITLE_TEXT = 'Software Engineer';
-const MULTIPLIER = 1;
 
 const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
     const visRef = useRef(visible);
@@ -20,87 +20,57 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
     const [textDone, setTextDone] = useState(false);
     const [volumeVisible, setVolumeVisible] = useState(false);
     const [freeCamVisible, setFreeCamVisible] = useState(false);
-    const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-    const typeText = (
-        i: number,
-        curText: string,
-        text: string,
-        setText: React.Dispatch<React.SetStateAction<string>>,
-        callback: () => void,
-        refOverride?: React.MutableRefObject<string>
-    ) => {
-        if (refOverride) {
-            text = refOverride.current;
-        }
-        if (i < text.length) {
-            const timer = setTimeout(() => {
-                if (visRef.current === true)
-                    window.postMessage(
-                        { type: 'keydown', key: `_AUTO_${text[i]}` },
-                        '*'
-                    );
-
-                setText(curText + text[i]);
-                typeText(
-                    i + 1,
-                    curText + text[i],
-                    text,
-                    setText,
-                    callback,
-                    refOverride
-                );
-            }, Math.random() * 50 + 50 * MULTIPLIER);
-
-            timersRef.current.push(timer);
-        } else {
-            callback();
-        }
-    };
+    const { typeText, setTimer } = useTypewriter();
 
     useEffect(() => {
-        if (visible && nameText == '') {
-            const timer = setTimeout(() => {
-                typeText(0, '', NAME_TEXT, setNameText, () => {
-                    typeText(0, '', TITLE_TEXT, setTitleText, () => {
-                        typeText(
-                            0,
-                            '',
-                            time,
-                            setTimeText,
-                            () => {
-                                setTextDone(true);
+        if (visible && nameText === '') {
+            setTimer(() => {
+                typeText({
+                    text: NAME_TEXT,
+                    setText: setNameText,
+                    isActive: () => visRef.current,
+                    onDone: () => {
+                        typeText({
+                            text: TITLE_TEXT,
+                            setText: setTitleText,
+                            isActive: () => visRef.current,
+                            onDone: () => {
+                                typeText({
+                                    text: timeRef.current,
+                                    getText: () => timeRef.current,
+                                    setText: setTimeText,
+                                    isActive: () => visRef.current,
+                                    onDone: () => setTextDone(true),
+                                });
                             },
-                            timeRef
-                        );
-                    });
+                        });
+                    },
                 });
             }, 400);
-
-            timersRef.current.push(timer);
         }
+
         visRef.current = visible;
-    }, [visible]);
+    }, [nameText, setTimer, typeText, visible]);
 
     useEffect(() => {
-        if (textDone) {
-            let freeCamTimer: ReturnType<typeof setTimeout> | undefined;
-            const volumeTimer = setTimeout(() => {
-                setVolumeVisible(true);
-                freeCamTimer = setTimeout(() => {
-                    setFreeCamVisible(true);
-                }, 250);
-            }, 250);
+        if (!textDone) return;
 
-            return () => {
-                clearTimeout(volumeTimer);
-                if (freeCamTimer) clearTimeout(freeCamTimer);
-            };
-        }
+        let freeCamTimer: ReturnType<typeof setTimeout> | undefined;
+        const volumeTimer = setTimeout(() => {
+            setVolumeVisible(true);
+            freeCamTimer = setTimeout(() => {
+                setFreeCamVisible(true);
+            }, 250);
+        }, 250);
+
+        return () => {
+            clearTimeout(volumeTimer);
+            if (freeCamTimer) clearTimeout(freeCamTimer);
+        };
     }, [textDone]);
 
     useEffect(() => {
-        window.postMessage({ type: 'keydown', key: `_AUTO_` }, '*');
+        sendAutoKey();
     }, [freeCamVisible, volumeVisible]);
 
     useEffect(() => {
@@ -112,15 +82,10 @@ const InfoOverlay: React.FC<InfoOverlayProps> = ({ visible }) => {
 
     useEffect(() => {
         timeRef.current = time;
-        textDone && setTimeText(time);
-    }, [time]);
-
-    useEffect(() => {
-        return () => {
-            timersRef.current.forEach(clearTimeout);
-            timersRef.current = [];
-        };
-    }, []);
+        if (textDone) {
+            setTimeText(time);
+        }
+    }, [textDone, time]);
 
     return (
         <div style={styles.wrapper}>
@@ -179,13 +144,6 @@ const styles: StyleSheetCSS = {
         width: '100%',
         alignItems: 'flex-start',
         justifyContent: 'flex-start',
-    },
-    blinkingContainer: {
-        // width: 100,
-        // height: 100,
-        marginLeft: 8,
-        paddingBottom: 2,
-        paddingRight: 4,
     },
     lastRow: {
         display: 'flex',

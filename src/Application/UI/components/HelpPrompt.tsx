@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-// import eventBus from '../EventBus';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import UIEventBus from '../EventBus';
 import { Easing } from '../Animation';
+import { sendAutoKey, useTypewriter } from '../hooks/useTypewriter';
 
 const HELP_TEXT = 'Click anywhere to begin';
 
@@ -12,31 +12,18 @@ const HelpPrompt: React.FC<HelpPromptProps> = () => {
     const [helpText, setHelpText] = useState('');
     const [visible, setVisible] = useState(true);
     const visRef = useRef(visible);
-    const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-    const typeHelpText = (i: number, curText: string) => {
-        if (i < HELP_TEXT.length && visRef.current) {
-            const timer = setTimeout(() => {
-                window.postMessage(
-                    { type: 'keydown', key: `_AUTO_${HELP_TEXT[i]}` },
-                    '*'
-                );
-
-                setHelpText(curText + HELP_TEXT[i]);
-                typeHelpText(i + 1, curText + HELP_TEXT[i]);
-            }, Math.random() * 120 + 50);
-
-            timersRef.current.push(timer);
-        }
-    };
-
-    // make a document listener to listen to clicks
+    const { typeText, setTimer } = useTypewriter();
 
     useEffect(() => {
-        const startTimer = setTimeout(() => {
-            typeHelpText(0, '');
+        setTimer(() => {
+            typeText({
+                text: HELP_TEXT,
+                setText: setHelpText,
+                isActive: () => visRef.current,
+                minDelay: 50,
+                randomDelay: 120,
+            });
         }, 500);
-        timersRef.current.push(startTimer);
 
         const hidePrompt = () => {
             setVisible(false);
@@ -50,14 +37,12 @@ const HelpPrompt: React.FC<HelpPromptProps> = () => {
         return () => {
             document.removeEventListener('mousedown', hidePrompt);
             unsubscribeMonitor();
-            timersRef.current.forEach(clearTimeout);
-            timersRef.current = [];
         };
-    }, []);
+    }, [setTimer, typeText]);
 
     useEffect(() => {
-        if (visible == false) {
-            window.postMessage({ type: 'keydown', key: `_AUTO_` }, '*');
+        if (!visible) {
+            sendAutoKey();
         }
         visRef.current = visible;
     }, [visible]);
@@ -105,8 +90,6 @@ const styles: StyleSheetCSS = {
         alignItems: 'flex-end',
     },
     blinkingContainer: {
-        // width: 100,
-        // height: 100,
         marginLeft: 8,
         paddingBottom: 2,
         paddingRight: 4,

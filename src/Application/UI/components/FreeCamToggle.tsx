@@ -1,26 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import UIEventBus from '../EventBus';
-import { Easing } from '../Animation';
 import camera from '../../../../static/textures/UI/camera.svg';
 import mouse from '../../../../static/textures/UI/mouse.svg';
+import IconToggle from './IconToggle';
+import { sendAutoKey } from '../hooks/useTypewriter';
 
-interface MuteToggleProps {}
+interface FreeCamToggleProps {}
 
-const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
-    const [isHovering, setIsHovering] = useState(false);
-    const [isActive, setIsActive] = useState(false);
+const FreeCamToggle: React.FC<FreeCamToggleProps> = ({}) => {
     const [freeCamActive, setFreeCamActive] = useState(false);
     const [blockEvents, setBlockEvents] = useState(true);
-
-    const onMouseDownHandler = useCallback(
-        (event: React.MouseEvent<HTMLDivElement>) => {
-            setIsActive(true);
-            event.preventDefault();
-            setFreeCamActive(!freeCamActive);
-        },
-        [freeCamActive]
-    );
 
     const iconSize = freeCamActive
         ? window.innerWidth < 768
@@ -29,10 +18,6 @@ const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
         : window.innerWidth < 768
         ? 4
         : 6;
-
-    const onMouseUpHandler = useCallback(() => {
-        setIsActive(false);
-    }, []);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -44,117 +29,30 @@ const MuteToggle: React.FC<MuteToggleProps> = ({}) => {
 
     useEffect(() => {
         if (!blockEvents) {
-            window.postMessage({ type: 'keydown', key: `_AUTO_` }, '*');
+            sendAutoKey();
             UIEventBus.dispatch('freeCamToggle', freeCamActive);
         }
     }, [blockEvents, freeCamActive]);
 
     return (
         <div style={styles.wrapper}>
-            <div
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-                style={styles.container}
-                onMouseDown={onMouseDownHandler}
-                onMouseUp={onMouseUpHandler}
-                className="icon-control-container"
-                id="prevent-click"
-            >
-                <motion.img
-                    id="prevent-click"
-                    src={freeCamActive ? mouse : camera}
-                    style={{ opacity: isActive ? 0.2 : isHovering ? 0.8 : 1 }}
-                    height={iconSize}
-                    animate={
-                        isActive
-                            ? 'active'
-                            : isHovering
-                            ? 'hovering'
-                            : 'default'
-                    }
-                    variants={iconVars}
-                />
-            </div>
-            {/* <motion.div
-                initial="hidden"
-                animate={freeCamActive ? 'active' : 'hidden'}
-                variants={indicatorVars}
-                style={Object.assign({}, styles.container, { marginLeft: 4 })}
-                id="prevent-click"
-            >
-                <p
-                    style={
-                        window.innerWidth < 768
-                            ? { fontSize: 8 }
-                            : { fontSize: 10 }
-                    }
-                >
-                    Free Cam Enabled
-                </p>
-            </motion.div> */}
+            <IconToggle
+                active={freeCamActive}
+                activeIcon={mouse}
+                inactiveIcon={camera}
+                imageSize={iconSize}
+                imageDimension="height"
+                onToggle={setFreeCamActive}
+                containerStyle={styles.container}
+            />
         </div>
     );
 };
 
-const iconVars = {
-    hovering: {
-        // scale: 1.2,
-        opacity: 0.8,
-        transition: {
-            duration: 0.1,
-            ease: Easing.expOut,
-        },
-    },
-    active: {
-        scale: 0.8,
-        opacity: 0.5,
-        transition: {
-            duration: 0.1,
-            ease: Easing.expOut,
-        },
-    },
-    default: {
-        scale: 1,
-        opacity: 1,
-        transition: {
-            duration: 0.2,
-            ease: Easing.expOut,
-        },
-    },
-};
-
-const indicatorVars = {
-    active: {
-        opacity: 1,
-        x: 0,
-        transition: {
-            duration: 0.2,
-            ease: Easing.expOut,
-        },
-    },
-    hidden: {
-        x: -4,
-        opacity: 0,
-        transition: {
-            duration: 0.2,
-            ease: Easing.expOut,
-        },
-    },
-};
-
 const styles: StyleSheetCSS = {
     container: {
-        background: 'black',
-        // padding: 4,
         paddingLeft: 8,
         paddingRight: 8,
-        textAlign: 'center',
-        display: 'flex',
-        // position: 'absolute',
-        boxSizing: 'border-box',
-        justifyContent: 'center',
-        alignItems: 'center',
-        cursor: 'pointer',
     },
     wrapper: {
         display: 'flex',
@@ -163,4 +61,4 @@ const styles: StyleSheetCSS = {
     },
 };
 
-export default MuteToggle;
+export default FreeCamToggle;
