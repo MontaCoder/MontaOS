@@ -1,46 +1,41 @@
 import * as THREE from 'three';
 import { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
-import GUI from 'lil-gui';
 import Application from '../Application';
-import Debug from '../Utils/Debug';
 import Resources from '../Utils/Resources';
-import Sizes from '../Utils/Sizes';
 import Camera from '../Camera/Camera';
-import EventEmitter from '../Utils/EventEmitter';
+import {
+    MONITOR_DIM_FACTOR,
+    MONITOR_ENCLOSING_COLOR,
+    MONITOR_IFRAME_PADDING,
+    MONITOR_IFRAME_URLS,
+    MONITOR_POSITION,
+    MONITOR_ROTATION,
+    MONITOR_SCREEN_SIZE,
+    MONITOR_TEXTURE_LAYER_SCALE,
+} from './monitorConfig';
+import {
+    MonitorMessage,
+    createForwardedMonitorEvent,
+    isAllowedMonitorMessage,
+} from './monitorEvents';
+import { createPlaneMesh, offsetPosition } from './monitorGeometry';
 
-const SCREEN_SIZE = { w: 1280, h: 1024 };
-const IFRAME_PADDING = 32;
-const IFRAME_SIZE = {
-    w: SCREEN_SIZE.w - IFRAME_PADDING,
-    h: SCREEN_SIZE.h - IFRAME_PADDING,
+type TextureLayer = {
+    texture: THREE.Texture;
+    blending: THREE.Blending;
+    opacity: number;
+    offset: number;
 };
-const FORWARDED_MESSAGE_TYPES = new Set([
-    'mousemove',
-    'mousedown',
-    'mouseup',
-    'keydown',
-    'keyup',
-]);
 
-type MonitorMessage = {
-    type?: string;
-    clientX?: number;
-    clientY?: number;
-    key?: string;
-};
-
-export default class MonitorScreen extends EventEmitter {
+export default class MonitorScreen {
     application: Application;
     scene: THREE.Scene;
     cssScene: THREE.Scene;
     resources: Resources;
-    debug: Debug;
-    sizes: Sizes;
-    debugFolder: GUI;
+    camera: Camera;
     screenSize: THREE.Vector2;
     position: THREE.Vector3;
     rotation: THREE.Euler;
-    camera: Camera;
     prevInComputer: boolean;
     shouldLeaveMonitor: boolean;
     inComputer: boolean;
@@ -49,18 +44,21 @@ export default class MonitorScreen extends EventEmitter {
     videoTextures: { [key in string]: THREE.VideoTexture };
     planeNormal: THREE.Vector3;
     viewVector: THREE.Vector3;
+    private cleanupListeners: EventUnsubscribe[];
+    private videoTextureRetryIds: number[];
 
     constructor() {
-        super();
         this.application = Application.getInstance();
         this.scene = this.application.scene;
         this.cssScene = this.application.cssScene;
-        this.sizes = this.application.sizes;
         this.resources = this.application.resources;
-        this.screenSize = new THREE.Vector2(SCREEN_SIZE.w, SCREEN_SIZE.h);
+        this.screenSize = new THREE.Vector2(
+            MONITOR_SCREEN_SIZE.w,
+            MONITOR_SCREEN_SIZE.h
+        );
         this.camera = this.application.camera;
-        this.position = new THREE.Vector3(0, 950, 255);
-        this.rotation = new THREE.Euler(-3 * THREE.MathUtils.DEG2RAD, 0, 0);
+        this.position = MONITOR_POSITION.clone();
+        this.rotation = MONITOR_ROTATION.clone();
         this.videoTextures = {};
         this.mouseClickInProgress = false;
         this.shouldLeaveMonitor = false;
@@ -68,8 +66,9 @@ export default class MonitorScreen extends EventEmitter {
         this.inComputer = false;
         this.planeNormal = new THREE.Vector3(0, 0, 1);
         this.viewVector = new THREE.Vector3();
+        this.cleanupListeners = [];
+        this.videoTextureRetryIds = [];
 
-        // Create screen
         this.initializeScreenEvents();
         this.createIframe();
         const maxOffset = this.createTextureLayers();
@@ -77,144 +76,110 @@ export default class MonitorScreen extends EventEmitter {
         this.createPerspectiveDimmer(maxOffset);
     }
 
-    initializeScreenEvents() {
-        document.addEventListener(
-            'mousemove',
-            (event: MouseEvent) => {
-                const computerEvent = event as ComputerMouseEvent;
-                const target = event.target as HTMLElement | null;
-                if (target?.id === 'computer-screen') {
-                    computerEvent.inComputer = true;
-                }
-
-                this.inComputer = Boolean(computerEvent.inComputer);
-
-                if (this.inComputer && !this.prevInComputer) {
-                    this.camera.trigger('enterMonitor');
-                }
-
-                if (
-                    !this.inComputer &&
-                    this.prevInComputer &&
-                    !this.mouseClickInProgress
-                ) {
-                    this.camera.trigger('leftMonitor');
-                }
-
-                if (
-                    !this.inComputer &&
-                    this.mouseClickInProgress &&
-                    this.prevInComputer
-                ) {
-                    this.shouldLeaveMonitor = true;
-                } else {
-                    this.shouldLeaveMonitor = false;
-                }
-
-                this.application.mouse.trigger('mousemove', [computerEvent]);
-
-                this.prevInComputer = this.inComputer;
-            },
-            false
-        );
-        document.addEventListener(
-            'mousedown',
-            (event: MouseEvent) => {
-                const computerEvent = event as ComputerMouseEvent;
-                this.inComputer = Boolean(computerEvent.inComputer);
-                this.application.mouse.trigger('mousedown', [computerEvent]);
-
-                this.mouseClickInProgress = true;
-                this.prevInComputer = this.inComputer;
-            },
-            false
-        );
-        document.addEventListener(
-            'mouseup',
-            (event: MouseEvent) => {
-                const computerEvent = event as ComputerMouseEvent;
-                this.inComputer = Boolean(computerEvent.inComputer);
-                this.application.mouse.trigger('mouseup', [computerEvent]);
-
-                if (this.shouldLeaveMonitor) {
-                    this.camera.trigger('leftMonitor');
-                    this.shouldLeaveMonitor = false;
-                }
-
-                this.mouseClickInProgress = false;
-                this.prevInComputer = this.inComputer;
-            },
-            false
+    private addListener(
+        target: EventTarget,
+        type: string,
+        listener: EventListener
+    ) {
+        target.addEventListener(type, listener);
+        this.cleanupListeners.push(() =>
+            target.removeEventListener(type, listener)
         );
     }
 
-    /**
-     * Creates the iframe for the computer screen
-     */
+    initializeScreenEvents() {
+        const onMouseMove = (event: MouseEvent) => {
+            const computerEvent = event as ComputerMouseEvent;
+            const target = event.target as HTMLElement | null;
+            if (target?.id === 'computer-screen') {
+                computerEvent.inComputer = true;
+            }
+
+            this.inComputer = Boolean(computerEvent.inComputer);
+
+            if (this.inComputer && !this.prevInComputer) {
+                this.camera.trigger('enterMonitor');
+            }
+
+            if (
+                !this.inComputer &&
+                this.prevInComputer &&
+                !this.mouseClickInProgress
+            ) {
+                this.camera.trigger('leftMonitor');
+            }
+
+            this.shouldLeaveMonitor =
+                !this.inComputer &&
+                this.mouseClickInProgress &&
+                this.prevInComputer;
+
+            this.application.mouse.trigger('mousemove', [computerEvent]);
+            this.prevInComputer = this.inComputer;
+        };
+
+        const onMouseDown = (event: MouseEvent) => {
+            const computerEvent = event as ComputerMouseEvent;
+            this.inComputer = Boolean(computerEvent.inComputer);
+            this.application.mouse.trigger('mousedown', [computerEvent]);
+
+            this.mouseClickInProgress = true;
+            this.prevInComputer = this.inComputer;
+        };
+
+        const onMouseUp = (event: MouseEvent) => {
+            const computerEvent = event as ComputerMouseEvent;
+            this.inComputer = Boolean(computerEvent.inComputer);
+            this.application.mouse.trigger('mouseup', [computerEvent]);
+
+            if (this.shouldLeaveMonitor) {
+                this.camera.trigger('leftMonitor');
+                this.shouldLeaveMonitor = false;
+            }
+
+            this.mouseClickInProgress = false;
+            this.prevInComputer = this.inComputer;
+        };
+
+        this.addListener(document, 'mousemove', onMouseMove as EventListener);
+        this.addListener(document, 'mousedown', onMouseDown as EventListener);
+        this.addListener(document, 'mouseup', onMouseUp as EventListener);
+    }
+
     createIframe() {
-        // Create container
         const container = document.createElement('div');
         container.style.width = this.screenSize.width + 'px';
         container.style.height = this.screenSize.height + 'px';
         container.style.opacity = '1';
         container.style.background = '#1d2e2f';
 
-        // Create iframe
         const iframe = document.createElement('iframe');
-
-        // Bubble mouse move events to the main application, so we can affect the camera
         iframe.onload = () => {
-            if (iframe.contentWindow) {
-                window.addEventListener('message', (event) => {
-                    if (!this.isAllowedMonitorMessage(event, iframe)) return;
+            if (!iframe.contentWindow) return;
 
-                    const data = event.data as MonitorMessage;
-                    const evt = new CustomEvent(data.type || '', {
-                        bubbles: true,
-                        cancelable: false,
-                    }) as ComputerEvent;
+            const onMonitorMessage = (event: MessageEvent<MonitorMessage>) => {
+                if (!isAllowedMonitorMessage(event, iframe)) return;
 
-                    evt.inComputer = true;
-                    if (data.type === 'mousemove') {
-                        const clRect = iframe.getBoundingClientRect();
-                        const { top, left, width, height } = clRect;
-                        const widthRatio = width / IFRAME_SIZE.w;
-                        const heightRatio = height / IFRAME_SIZE.h;
+                iframe.dispatchEvent(
+                    createForwardedMonitorEvent(event.data, iframe)
+                );
+            };
 
-                        evt.clientX = Math.round(
-                            (data.clientX || 0) * widthRatio + left
-                        );
-                        evt.clientY = Math.round(
-                            (data.clientY || 0) * heightRatio + top
-                        );
-                    } else if (data.type === 'keydown') {
-                        evt.key = data.key;
-                    } else if (data.type === 'keyup') {
-                        evt.key = data.key;
-                    }
-
-                    iframe.dispatchEvent(evt);
-                });
-            }
+            this.addListener(
+                window,
+                'message',
+                onMonitorMessage as EventListener
+            );
         };
 
-        // Set iframe attributes
-        // PROD
-        iframe.src = 'https://innerportfolio.netlify.app/';
-        /**
-         * Use dev server is query params are present
-         *
-         * Warning: This will not work unless the dev server is running on localhost:3000
-         * Also running the dev server causes browsers to freak out over unsecure connections
-         * in the iframe, so it will flag a ton of issues.
-         */
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('dev')) {
-            iframe.src = 'http://localhost:3000/';
+        iframe.src = MONITOR_IFRAME_URLS.production;
+        if (new URLSearchParams(window.location.search).has('dev')) {
+            iframe.src = MONITOR_IFRAME_URLS.development;
         }
+
         iframe.style.width = this.screenSize.width + 'px';
         iframe.style.height = this.screenSize.height + 'px';
-        iframe.style.padding = IFRAME_PADDING + 'px';
+        iframe.style.padding = MONITOR_IFRAME_PADDING + 'px';
         iframe.style.boxSizing = 'border-box';
         iframe.style.opacity = '1';
         iframe.className = 'jitter';
@@ -222,271 +187,167 @@ export default class MonitorScreen extends EventEmitter {
         iframe.frameBorder = '0';
         iframe.title = 'MontaOS';
 
-        // Add iframe to container
         container.appendChild(iframe);
-
-        // Create CSS plane
         this.createCssPlane(container);
     }
 
-    isAllowedMonitorMessage(
-        event: MessageEvent<MonitorMessage>,
-        iframe: HTMLIFrameElement
-    ) {
-        const data = event.data;
-        if (!data || !data.type || !FORWARDED_MESSAGE_TYPES.has(data.type)) {
-            return false;
-        }
-
-        if (event.source === window) return true;
-        if (event.source !== iframe.contentWindow) return false;
-
-        try {
-            return event.origin === new URL(iframe.src).origin;
-        } catch {
-            return false;
-        }
-    }
-
-    /**
-     * Creates a CSS plane and GL plane to properly occlude the CSS plane
-     * @param element the element to create the css plane for
-     */
     createCssPlane(element: HTMLElement) {
-        // Create CSS3D object
         const object = new CSS3DObject(element);
-
-        // copy monitor position and rotation
         object.position.copy(this.position);
         object.rotation.copy(this.rotation);
-
-        // Add to CSS scene
         this.cssScene.add(object);
 
-        // Create GL plane
-        const material = new THREE.MeshLambertMaterial();
-        material.side = THREE.DoubleSide;
-        material.opacity = 0;
-        material.transparent = true;
-        // NoBlending allows the GL plane to occlude the CSS plane
-        material.blending = THREE.NoBlending;
+        const material = new THREE.MeshLambertMaterial({
+            side: THREE.DoubleSide,
+            opacity: 0,
+            transparent: true,
+            blending: THREE.NoBlending,
+        });
 
-        // Create plane geometry
-        const geometry = new THREE.PlaneGeometry(
+        const mesh = createPlaneMesh(
             this.screenSize.width,
-            this.screenSize.height
+            this.screenSize.height,
+            material,
+            object.position,
+            object.rotation
         );
-
-        // Create the GL plane mesh
-        const mesh = new THREE.Mesh(geometry, material);
-
-        // Copy the position, rotation and scale of the CSS plane to the GL plane
-        mesh.position.copy(object.position);
-        mesh.rotation.copy(object.rotation);
         mesh.scale.copy(object.scale);
-
-        // Add to gl scene
         this.scene.add(mesh);
     }
 
-    /**
-     * Creates the texture layers for the computer screen
-     * @returns the maximum offset of the texture layers
-     */
     createTextureLayers() {
         const textures = this.resources.items.texture;
 
-        this.getVideoTextures('video-1');
-        this.getVideoTextures('video-2');
+        this.getVideoTexture('video-1');
+        this.getVideoTexture('video-2');
 
-        // Scale factor to multiply depth offset by
-        const scaleFactor = 4;
-
-        // Construct the texture layers
-        const layers = {
-            smudge: {
+        const layers: TextureLayer[] = [
+            {
                 texture: textures.monitorSmudgeTexture,
                 blending: THREE.AdditiveBlending,
                 opacity: 0.12,
                 offset: 24,
             },
-            innerShadow: {
+            {
                 texture: textures.monitorShadowTexture,
                 blending: THREE.NormalBlending,
                 opacity: 1,
                 offset: 5,
             },
-            video: {
+            {
                 texture: this.videoTextures['video-1'],
                 blending: THREE.AdditiveBlending,
                 opacity: 0.5,
                 offset: 10,
             },
-            video2: {
+            {
                 texture: this.videoTextures['video-2'],
                 blending: THREE.AdditiveBlending,
                 opacity: 0.1,
                 offset: 15,
             },
-        };
+        ];
 
-        // Declare max offset
-        let maxOffset = -1;
-
-        // Add the texture layers to the screen
-        for (const key of Object.keys(layers)) {
-            const layer = layers[key as keyof typeof layers];
-            const offset = layer.offset * scaleFactor;
-            this.addTextureLayer(
-                layer.texture,
-                layer.blending,
-                layer.opacity,
-                offset
-            );
-            // Calculate the max offset
-            if (offset > maxOffset) maxOffset = offset;
-        }
-
-        // Return the max offset
-        return maxOffset;
+        return layers.reduce((maxOffset, layer) => {
+            const offset = layer.offset * MONITOR_TEXTURE_LAYER_SCALE;
+            this.addTextureLayer(layer, offset);
+            return Math.max(maxOffset, offset);
+        }, -1);
     }
 
-    getVideoTextures(videoId: string) {
+    getVideoTexture(videoId: string) {
         const video = document.getElementById(videoId);
         if (!video) {
-            setTimeout(() => {
-                this.getVideoTextures(videoId);
+            const retryId = window.setTimeout(() => {
+                this.getVideoTexture(videoId);
             }, 100);
-        } else {
-            this.videoTextures[videoId] = new THREE.VideoTexture(
-                video as HTMLVideoElement
-            );
+            this.videoTextureRetryIds.push(retryId);
+            return;
         }
+
+        this.videoTextures[videoId] = new THREE.VideoTexture(
+            video as HTMLVideoElement
+        );
     }
 
-    /**
-     * Adds a texture layer to the screen
-     * @param texture the texture to add
-     * @param blending the blending mode
-     * @param opacity the opacity of the texture
-     * @param offset the offset of the texture, higher values are further from the screen
-     */
-    addTextureLayer(
-        texture: THREE.Texture,
-        blendingMode: THREE.Blending,
-        opacity: number,
-        offset: number
-    ) {
-        // Create material
+    addTextureLayer(layer: TextureLayer, offset: number) {
         const material = new THREE.MeshBasicMaterial({
-            map: texture,
-            blending: blendingMode,
+            map: layer.texture,
+            blending: layer.blending,
             side: THREE.DoubleSide,
-            opacity,
+            opacity: layer.opacity,
             transparent: true,
         });
 
-        // Create geometry
-        const geometry = new THREE.PlaneGeometry(
+        const mesh = createPlaneMesh(
             this.screenSize.width,
-            this.screenSize.height
+            this.screenSize.height,
+            material,
+            offsetPosition(this.position, new THREE.Vector3(0, 0, offset)),
+            this.rotation
         );
-
-        // Create mesh
-        const mesh = new THREE.Mesh(geometry, material);
-
-        // Copy position and apply the depth offset
-        mesh.position.copy(
-            this.offsetPosition(this.position, new THREE.Vector3(0, 0, offset))
-        );
-
-        // Copy rotation
-        mesh.rotation.copy(this.rotation);
 
         this.scene.add(mesh);
     }
 
-    /**
-     * Creates enclosing planes for the computer screen
-     * @param maxOffset the maximum offset of the texture layers
-     */
     createEnclosingPlanes(maxOffset: number) {
-        // Create planes, lots of boiler plate code here because I'm lazy
-        const planes = {
-            left: {
-                size: new THREE.Vector2(maxOffset, this.screenSize.height),
-                position: this.offsetPosition(
-                    this.position,
-                    new THREE.Vector3(
-                        -this.screenSize.width / 2,
-                        0,
-                        maxOffset / 2
-                    )
-                ),
-                rotation: new THREE.Euler(0, 90 * THREE.MathUtils.DEG2RAD, 0),
-            },
-            right: {
-                size: new THREE.Vector2(maxOffset, this.screenSize.height),
-                position: this.offsetPosition(
-                    this.position,
-                    new THREE.Vector3(
-                        this.screenSize.width / 2,
-                        0,
-                        maxOffset / 2
-                    )
-                ),
-                rotation: new THREE.Euler(0, 90 * THREE.MathUtils.DEG2RAD, 0),
-            },
-            top: {
-                size: new THREE.Vector2(this.screenSize.width, maxOffset),
-                position: this.offsetPosition(
-                    this.position,
-                    new THREE.Vector3(
-                        0,
-                        this.screenSize.height / 2,
-                        maxOffset / 2
-                    )
-                ),
-                rotation: new THREE.Euler(90 * THREE.MathUtils.DEG2RAD, 0, 0),
-            },
-            bottom: {
-                size: new THREE.Vector2(this.screenSize.width, maxOffset),
-                position: this.offsetPosition(
-                    this.position,
-                    new THREE.Vector3(
-                        0,
-                        -this.screenSize.height / 2,
-                        maxOffset / 2
-                    )
-                ),
-                rotation: new THREE.Euler(90 * THREE.MathUtils.DEG2RAD, 0, 0),
-            },
-        };
+        const halfWidth = this.screenSize.width / 2;
+        const halfHeight = this.screenSize.height / 2;
+        const halfOffset = maxOffset / 2;
 
-        // Add each of the planes
-        for (const key of Object.keys(planes)) {
-            const plane = planes[key as keyof typeof planes];
-            this.createEnclosingPlane(plane);
-        }
+        const planes: EnclosingPlane[] = [
+            {
+                size: new THREE.Vector2(maxOffset, this.screenSize.height),
+                position: offsetPosition(
+                    this.position,
+                    new THREE.Vector3(-halfWidth, 0, halfOffset)
+                ),
+                rotation: new THREE.Euler(0, 90 * THREE.MathUtils.DEG2RAD, 0),
+            },
+            {
+                size: new THREE.Vector2(maxOffset, this.screenSize.height),
+                position: offsetPosition(
+                    this.position,
+                    new THREE.Vector3(halfWidth, 0, halfOffset)
+                ),
+                rotation: new THREE.Euler(0, 90 * THREE.MathUtils.DEG2RAD, 0),
+            },
+            {
+                size: new THREE.Vector2(this.screenSize.width, maxOffset),
+                position: offsetPosition(
+                    this.position,
+                    new THREE.Vector3(0, halfHeight, halfOffset)
+                ),
+                rotation: new THREE.Euler(90 * THREE.MathUtils.DEG2RAD, 0, 0),
+            },
+            {
+                size: new THREE.Vector2(this.screenSize.width, maxOffset),
+                position: offsetPosition(
+                    this.position,
+                    new THREE.Vector3(0, -halfHeight, halfOffset)
+                ),
+                rotation: new THREE.Euler(90 * THREE.MathUtils.DEG2RAD, 0, 0),
+            },
+        ];
+
+        planes.forEach((plane) => this.createEnclosingPlane(plane));
     }
 
-    /**
-     * Creates a plane for the enclosing planes
-     * @param plane the plane to create
-     */
     createEnclosingPlane(plane: EnclosingPlane) {
         const material = new THREE.MeshBasicMaterial({
             side: THREE.DoubleSide,
-            color: 0x48493f,
+            color: MONITOR_ENCLOSING_COLOR,
         });
 
-        const geometry = new THREE.PlaneGeometry(plane.size.x, plane.size.y);
-        const mesh = new THREE.Mesh(geometry, material);
-
-        mesh.position.copy(plane.position);
-        mesh.rotation.copy(plane.rotation);
-
-        this.scene.add(mesh);
+        this.scene.add(
+            createPlaneMesh(
+                plane.size.x,
+                plane.size.y,
+                material,
+                plane.position,
+                plane.rotation
+            )
+        );
     }
 
     createPerspectiveDimmer(maxOffset: number) {
@@ -497,67 +358,45 @@ export default class MonitorScreen extends EventEmitter {
             blending: THREE.AdditiveBlending,
         });
 
-        const plane = new THREE.PlaneGeometry(
+        this.dimmingPlane = createPlaneMesh(
             this.screenSize.width,
-            this.screenSize.height
+            this.screenSize.height,
+            material,
+            offsetPosition(this.position, new THREE.Vector3(0, 0, maxOffset - 5)),
+            this.rotation
         );
 
-        const mesh = new THREE.Mesh(plane, material);
-
-        mesh.position.copy(
-            this.offsetPosition(
-                this.position,
-                new THREE.Vector3(0, 0, maxOffset - 5)
-            )
-        );
-
-        mesh.rotation.copy(this.rotation);
-
-        this.dimmingPlane = mesh;
-
-        this.scene.add(mesh);
-    }
-
-    /**
-     * Offsets a position vector by another vector
-     * @param position the position to offset
-     * @param offset the offset to apply
-     * @returns the new offset position
-     */
-    offsetPosition(position: THREE.Vector3, offset: THREE.Vector3) {
-        const newPosition = new THREE.Vector3();
-        newPosition.copy(position);
-        newPosition.add(offset);
-        return newPosition;
+        this.scene.add(this.dimmingPlane);
     }
 
     update() {
-        if (this.dimmingPlane) {
-            this.viewVector.copy(this.camera.instance.position);
-            this.viewVector.sub(this.position);
-            this.viewVector.normalize();
+        if (!this.dimmingPlane) return;
 
-            const dot = this.viewVector.dot(this.planeNormal);
+        this.viewVector.copy(this.camera.instance.position);
+        this.viewVector.sub(this.position);
+        this.viewVector.normalize();
 
-            // calculate the distance from the camera vector to the plane vector
-            const dimPos = this.dimmingPlane.position;
-            const camPos = this.camera.instance.position;
+        const dot = this.viewVector.dot(this.planeNormal);
+        const distance = this.camera.instance.position.distanceTo(
+            this.dimmingPlane.position
+        );
+        const opacity = 1 / (distance / 10000);
 
-            const distance = Math.sqrt(
-                (camPos.x - dimPos.x) ** 2 +
-                    (camPos.y - dimPos.y) ** 2 +
-                    (camPos.z - dimPos.z) ** 2
-            );
+        const material = this.dimmingPlane.material;
+        if (material instanceof THREE.MeshBasicMaterial) {
+            material.opacity =
+                (1 - opacity) * MONITOR_DIM_FACTOR +
+                (1 - dot) * MONITOR_DIM_FACTOR;
+        }
+    }
 
-            const opacity = 1 / (distance / 10000);
-
-            const DIM_FACTOR = 0.7;
-
-            const material = this.dimmingPlane.material;
-            if (material instanceof THREE.MeshBasicMaterial) {
-                material.opacity =
-                    (1 - opacity) * DIM_FACTOR + (1 - dot) * DIM_FACTOR;
-            }
+    destroy() {
+        this.cleanupListeners.forEach((cleanup) => cleanup());
+        this.cleanupListeners = [];
+        this.videoTextureRetryIds.forEach((id) => window.clearTimeout(id));
+        this.videoTextureRetryIds = [];
+        for (const key in this.videoTextures) {
+            this.videoTextures[key].dispose();
         }
     }
 }
