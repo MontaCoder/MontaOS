@@ -1,29 +1,47 @@
-# MontaOs
+# MontaOS
 
-MontaOS project is a creative double portfolio at Once  <a href="https://MontassarHajri.com/"><samp>MontaOS.com</samp></a>. If you are looking for the  repository you can find it here <a href="https://github.com/MontaCoder/MontaOS"><samp>here</samp></a>! Thanks for taking the time to check this out. If you have any questions of comments, feel free to shoot me an email at <samp><a href="mailto:MontassarHajri@outlook.com">MontassarHajri@outlook.com</a></samp> or you can DM me on twitter <a href="https://x.com/MontassarHajri_"><samp>@MontassarHajri_</samp></a>.
+MontaOS is an immersive 3D portfolio built with React, Three.js, CSS3DRenderer,
+and baked GLTF assets. The experience includes a BIOS-style boot sequence, a
+virtual monitor iframe, spatial audio, and cinematic camera transitions.
 
-<br>
-
-To setup a dev environment:
+## Setup
 
 ```bash
-# Clone the repository
-
-# Install dependencies 
-npm i
-
-# Run the local dev server
+npm ci
 npm run dev
 ```
 
-To serve a production build:
+The dev server prints both localhost and local network URLs. Add `?debug` to the
+URL to skip the loading start gate and show the FPS panel.
+
+## Production
 
 ```bash
-# Install dependencies if not already done - 'npi i'
-
-# Build for production
 npm run build
-
-# Serve the build using express
 npm start
 ```
+
+The Express server serves `public/` and exposes `POST /api/send-email`.
+
+## Validation
+
+```bash
+npm run typecheck
+npm run build
+```
+
+Type checking is the main source-level validation step. Build the production
+bundle after it passes.
+
+## Environment
+
+The contact endpoint uses these optional environment variables:
+
+- `PORT`: Express port, default `8080`
+- `FOLIO_EMAIL`: SMTP username
+- `FOLIO_PASSWORD`: SMTP password
+- `CORS_ORIGINS`: comma-separated allowed origins for production
+
+Without `CORS_ORIGINS`, same-origin requests and local development origins are
+allowed.
+
