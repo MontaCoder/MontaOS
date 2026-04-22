@@ -5,7 +5,11 @@
 </p>
 
 <p align="center">
-  <img src="./public/images/preview-new.jpg" alt="MontaOS preview" width="100%" />
+  <img
+    src="https://raw.githubusercontent.com/MontaCoder/MontaOS/main/public/images/preview-new.jpg"
+    alt="MontaOS preview"
+    width="100%"
+  />
 </p>
 
 ## Overview
