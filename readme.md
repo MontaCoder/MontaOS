@@ -6,7 +6,7 @@
 
 <p align="center">
   <img
-    src="https://raw.githubusercontent.com/MontaCoder/MontaOS/main/public/images/preview-new.jpg"
+    src="https://raw.githubusercontent.com/MontaCoder/MontaOS/main/static/images/preview-new.jpg"
     alt="MontaOS preview"
     width="100%"
   />
